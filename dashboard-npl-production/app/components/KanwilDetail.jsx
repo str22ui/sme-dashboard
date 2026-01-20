@@ -193,7 +193,7 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                 Rp {formatCurrency(kanwilSummary?.kumk_des ?? 0)}
               </div>
               <div className="text-sm text-gray-600 font-semibold">
-                {{formatPercent(kanwilSummary?.kumkPercent_des)}%
+                {formatPercent(kanwilSummary?.kumkPercent_des)}%
               </div>
             </div>
           </div>
