@@ -1,5 +1,6 @@
 import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
+import pdf from 'pdf-parse/lib/pdf-parse.js'
 
 export async function POST(request) {
   try {
@@ -32,33 +33,41 @@ export async function POST(request) {
     
     const uploadDate = new Date().toISOString()
     
-    console.log('Generating mock data...')
+    console.log('Parsing NPL PDF...')
+    const nplBuffer = Buffer.from(await nplFile.arrayBuffer())
+    const nplPdfData = await pdf(nplBuffer)
+    const nplData = parseNPLData(nplPdfData.text)
     
-    const mockNPLData = generateMockNPLData()
-    const mockKOL2Data = generateMockKOL2Data()
-    const mockRealisasiData = generateMockRealisasiData()
+    console.log('Parsing KOL2 PDF...')
+    const kol2Buffer = Buffer.from(await kol2File.arrayBuffer())
+    const kol2PdfData = await pdf(kol2Buffer)
+    const kol2Data = parseKOL2Data(kol2PdfData.text)
+    
+    console.log('Parsing Realisasi PDF...')
+    const realisasiBuffer = Buffer.from(await realisasiFile.arrayBuffer())
+    const realisasiPdfData = await pdf(realisasiBuffer)
+    const realisasiData = parseRealisasiData(realisasiPdfData.text)
     
     console.log('Uploading to Vercel Blob...')
     
     try {
-      // Upload with FIXED NAMES (no hash)
-      const nplMetadata = await put('npl_metadata.json', JSON.stringify({
+      // Upload metadata
+      await put('npl_metadata.json', JSON.stringify({
         filename: nplFile.name,
         uploadDate,
         fileSize: nplFile.size
       }), { 
         access: 'public',
-        addRandomSuffix: false  // IMPORTANT: No hash!
+        addRandomSuffix: false
       })
-      console.log('NPL metadata uploaded:', nplMetadata.url)
       
-      const nplParsed = await put('npl_parsed.json', JSON.stringify(mockNPLData), { 
+      // Upload parsed NPL data
+      await put('npl_parsed.json', JSON.stringify(nplData), { 
         access: 'public',
-        addRandomSuffix: false  // IMPORTANT: No hash!
+        addRandomSuffix: false
       })
-      console.log('NPL parsed uploaded:', nplParsed.url)
       
-      const kol2Metadata = await put('kol2_metadata.json', JSON.stringify({
+      await put('kol2_metadata.json', JSON.stringify({
         filename: kol2File.name,
         uploadDate,
         fileSize: kol2File.size
@@ -66,15 +75,13 @@ export async function POST(request) {
         access: 'public',
         addRandomSuffix: false
       })
-      console.log('KOL2 metadata uploaded:', kol2Metadata.url)
       
-      const kol2Parsed = await put('kol2_parsed.json', JSON.stringify(mockKOL2Data), { 
+      await put('kol2_parsed.json', JSON.stringify(kol2Data), { 
         access: 'public',
         addRandomSuffix: false
       })
-      console.log('KOL2 parsed uploaded:', kol2Parsed.url)
       
-      const realisasiMetadata = await put('realisasi_metadata.json', JSON.stringify({
+      await put('realisasi_metadata.json', JSON.stringify({
         filename: realisasiFile.name,
         uploadDate,
         fileSize: realisasiFile.size
@@ -82,24 +89,22 @@ export async function POST(request) {
         access: 'public',
         addRandomSuffix: false
       })
-      console.log('Realisasi metadata uploaded:', realisasiMetadata.url)
       
-      const realisasiParsed = await put('realisasi_parsed.json', JSON.stringify(mockRealisasiData), { 
+      await put('realisasi_parsed.json', JSON.stringify(realisasiData), { 
         access: 'public',
         addRandomSuffix: false
       })
-      console.log('Realisasi parsed uploaded:', realisasiParsed.url)
       
       console.log('All files uploaded successfully!')
       
       return NextResponse.json({
         success: true,
-        message: 'Files uploaded successfully',
+        message: 'Files uploaded and parsed successfully',
         uploadDate,
-        urls: {
-          npl: nplParsed.url,
-          kol2: kol2Parsed.url,
-          realisasi: realisasiParsed.url
+        stats: {
+          nplCabang: nplData.cabangData?.length || 0,
+          kol2Cabang: kol2Data.cabangData?.length || 0,
+          realisasiDays: realisasiData.dailyData?.length || 0
         }
       })
       
@@ -120,149 +125,207 @@ export async function POST(request) {
   }
 }
 
-// Mock data generators (same as before)
-function generateMockNPLData() {
-  const kanwilList = [
+// Parse NPL/KOL2 PDF
+function parseNPLData(text) {
+  console.log('Parsing NPL data from PDF text...')
+  
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+  
+  const kanwilNames = [
     'Jakarta I', 'Jakarta II', 'Jateng DIY', 'Jabanus',
     'Jawa Barat', 'Kalimantan', 'Sulampua', 'Sumatera 1', 'Sumatera 2'
   ]
   
-  const cabangByKanwil = {
-    'Jakarta I': [
-      { name: 'Kelapa Gading Square', total: 18512, totalPercent: 10.40 },
-      { name: 'Bumi Serpong Damai', total: 14000, totalPercent: 23.46 },
-      { name: 'Bintaro Jaya', total: 6502, totalPercent: 19.67 },
-      { name: 'Jakarta Harmoni', total: 3008, totalPercent: 6.67 },
-      { name: 'Jakarta Kebon Jeruk', total: 2407, totalPercent: 3.88 },
-      { name: 'Jakarta Pluit', total: 1356, totalPercent: 2.55 },
-      { name: 'Ciputat', total: 797, totalPercent: 2.36 },
-      { name: 'Tangerang', total: 771, totalPercent: 0.78 }
-    ],
-    'Jakarta II': [
-      { name: 'Bogor', total: 8234, totalPercent: 12.45 },
-      { name: 'Sukabumi', total: 5678, totalPercent: 8.92 },
-      { name: 'Melawai', total: 4321, totalPercent: 7.34 },
-      { name: 'Depok', total: 3456, totalPercent: 5.67 },
-      { name: 'Bekasi', total: 2890, totalPercent: 4.23 }
-    ],
-    'Jateng DIY': [
-      { name: 'Yogyakarta', total: 7890, totalPercent: 11.23 },
-      { name: 'Semarang', total: 6543, totalPercent: 9.87 },
-      { name: 'Solo', total: 5432, totalPercent: 8.45 },
-      { name: 'Purwokerto', total: 3456, totalPercent: 6.78 },
-      { name: 'Magelang', total: 2345, totalPercent: 4.56 }
-    ],
-    'Jabanus': [
-      { name: 'Surabaya', total: 9876, totalPercent: 13.45 },
-      { name: 'Malang', total: 7654, totalPercent: 10.23 },
-      { name: 'Denpasar', total: 6789, totalPercent: 9.12 },
-      { name: 'Jember', total: 4567, totalPercent: 7.89 },
-      { name: 'Sidoarjo', total: 3456, totalPercent: 5.67 }
-    ],
-    'Jawa Barat': [
-      { name: 'Bandung', total: 8765, totalPercent: 12.34 },
-      { name: 'Bandung Timur', total: 6543, totalPercent: 9.87 },
-      { name: 'Cirebon', total: 5432, totalPercent: 8.45 },
-      { name: 'Tasikmalaya', total: 4321, totalPercent: 7.23 },
-      { name: 'Garut', total: 3210, totalPercent: 5.67 }
-    ],
-    'Kalimantan': [
-      { name: 'Balikpapan', total: 7654, totalPercent: 10.45 },
-      { name: 'Banjarmasin', total: 6543, totalPercent: 9.23 },
-      { name: 'Samarinda', total: 5432, totalPercent: 8.12 },
-      { name: 'Pontianak', total: 4321, totalPercent: 6.78 }
-    ],
-    'Sulampua': [
-      { name: 'Makassar', total: 8765, totalPercent: 11.23 },
-      { name: 'Manado', total: 6543, totalPercent: 9.45 },
-      { name: 'Palu', total: 4321, totalPercent: 7.12 },
-      { name: 'Jayapura', total: 3210, totalPercent: 5.67 }
-    ],
-    'Sumatera 1': [
-      { name: 'Medan', total: 9876, totalPercent: 12.45 },
-      { name: 'Pekanbaru', total: 7654, totalPercent: 10.23 },
-      { name: 'Batam', total: 6543, totalPercent: 8.90 },
-      { name: 'Padang', total: 5432, totalPercent: 7.56 }
-    ],
-    'Sumatera 2': [
-      { name: 'Palembang', total: 8765, totalPercent: 11.34 },
-      { name: 'Jambi', total: 6543, totalPercent: 9.23 },
-      { name: 'Bengkulu', total: 4321, totalPercent: 7.12 },
-      { name: 'Bandar Lampung', total: 3210, totalPercent: 5.45 }
-    ]
-  }
-  
   const cabangData = []
-  kanwilList.forEach(kanwil => {
-    cabangByKanwil[kanwil].forEach(cabang => {
-      cabangData.push({
-        kanwil,
-        name: cabang.name,
-        total: cabang.total,
-        kumk: cabang.total * 0.55,
-        kur: cabang.total * 0.45,
-        totalPercent: cabang.totalPercent,
-        kumkPercent: cabang.totalPercent * 0.55,
-        kurPercent: cabang.totalPercent * 0.45
-      })
-    })
-  })
+  const kanwilData = []
   
-  const kanwilData = kanwilList.map(name => {
-    const cabangInKanwil = cabangData.filter(c => c.kanwil === name)
-    const total = cabangInKanwil.reduce((sum, c) => sum + c.total, 0)
-    const kumk = cabangInKanwil.reduce((sum, c) => sum + c.kumk, 0)
-    const kur = cabangInKanwil.reduce((sum, c) => sum + c.kur, 0)
+  // Pattern untuk parse data cabang
+  // Format: No | Nama Cabang | Wilayah | KUMK_des | % | KUR_des | % | Total_des | % | KUMK_jan | % | KUR_jan | % | Total_jan | %
+  const cabangPattern = /^(\d+)\s+(.+?)\s+(Jakarta I|Jakarta II|Jateng DIY|Jabanus|Jawa Barat|Kalimantan|Sulampua|Sumatera 1|Sumatera 2)/
+  
+  let currentKanwil = null
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     
-    return {
-      name,
-      total,
-      kumk,
-      kur,
-      totalPercent: total / cabangInKanwil.length,
-      kumkPercent: kumk / cabangInKanwil.length,
-      kurPercent: kur / cabangInKanwil.length
+    // Detect Kanwil total line
+    if (line.startsWith('Total Kanwil')) {
+      const kanwilMatch = line.match(/Total Kanwil (.+?)(\s+[\d,\.]+)/)
+      if (kanwilMatch) {
+        currentKanwil = kanwilMatch[1].trim()
+        
+        // Parse kanwil summary dari line berikutnya
+        const numbers = extractNumbers(line)
+        if (numbers.length >= 12) {
+          kanwilData.push({
+            name: currentKanwil,
+            // Desember (13 Des 2025)
+            kumk_des: numbers[0],
+            kumkPercent_des: numbers[1],
+            kur_des: numbers[2],
+            kurPercent_des: numbers[3],
+            total_des: numbers[4],
+            totalPercent_des: numbers[5],
+            // Januari (13 Jan 2026)
+            kumk_jan: numbers[6],
+            kumkPercent_jan: numbers[7],
+            kur_jan: numbers[8],
+            kurPercent_jan: numbers[9],
+            total_jan: numbers[10],
+            totalPercent_jan: numbers[11],
+          })
+        }
+      }
+      continue
     }
-  })
-  
-  const totalNasional = {
-    total: cabangData.reduce((sum, c) => sum + c.total, 0),
-    kumk: cabangData.reduce((sum, c) => sum + c.kumk, 0),
-    kur: cabangData.reduce((sum, c) => sum + c.kur, 0),
-    totalPercent: 3.21,
-    kumkPercent: 4.39,
-    kurPercent: 2.42
+    
+    // Parse cabang data
+    const match = line.match(cabangPattern)
+    if (match) {
+      const cabangName = match[2].trim()
+      const kanwil = match[3].trim()
+      
+      // Extract all numbers from this line
+      const numbers = extractNumbers(line)
+      
+      // Minimal harus ada 12 angka (KUMK, KUR, Total untuk 2 periode dengan persen)
+      if (numbers.length >= 12) {
+        cabangData.push({
+          kanwil: kanwil,
+          name: cabangName,
+          // Desember (13 Des 2025)
+          kumk_des: numbers[0] || 0,
+          kumkPercent_des: numbers[1] || 0,
+          kur_des: numbers[2] || 0,
+          kurPercent_des: numbers[3] || 0,
+          total_des: numbers[4] || 0,
+          totalPercent_des: numbers[5] || 0,
+          // Januari (13 Jan 2026)
+          kumk_jan: numbers[6] || 0,
+          kumkPercent_jan: numbers[7] || 0,
+          kur_jan: numbers[8] || 0,
+          kurPercent_jan: numbers[9] || 0,
+          total_jan: numbers[10] || 0,
+          totalPercent_jan: numbers[11] || 0,
+        })
+      }
+    }
   }
   
-  return { totalNasional, kanwilData, cabangData }
+  // Calculate total nasional
+  const totalNasional = calculateTotalNasional(kanwilData)
+  
+  console.log(`Parsed ${cabangData.length} cabang and ${kanwilData.length} kanwil`)
+  
+  return {
+    type: 'npl',
+    totalNasional,
+    kanwilData,
+    cabangData,
+    parsedAt: new Date().toISOString()
+  }
 }
 
-function generateMockKOL2Data() {
-  return generateMockNPLData()
+function parseKOL2Data(text) {
+  // KOL2 structure similar to NPL
+  return parseNPLData(text)
 }
 
-function generateMockRealisasiData() {
-  const dailyData = [
-    { date: 1, kur: 419, kumk: 250, smeSwadana: 200, total: 869 },
-    { date: 2, kur: 304, kumk: 0, smeSwadana: 0, total: 304 },
-    { date: 3, kur: 1910, kumk: 1261, smeSwadana: 1310, total: 5939 },
-    { date: 4, kur: 2107, kumk: 4537, smeSwadana: 0, total: 6644 },
-    { date: 5, kur: 5021, kumk: 6000, smeSwadana: 4700, total: 15721 },
-    { date: 6, kur: 4500, kumk: 3200, smeSwadana: 2800, total: 10500 },
-    { date: 7, kur: 3800, kumk: 4100, smeSwadana: 3500, total: 11400 },
-    { date: 8, kur: 4200, kumk: 3800, smeSwadana: 3200, total: 11200 },
-    { date: 9, kur: 5500, kumk: 2900, smeSwadana: 2100, total: 10500 },
-    { date: 10, kur: 6200, kumk: 4800, smeSwadana: 3900, total: 14900 },
-    { date: 11, kur: 3900, kumk: 3500, smeSwadana: 2800, total: 10200 },
-    { date: 12, kur: 5100, kumk: 4200, smeSwadana: 3400, total: 12700 },
-    { date: 13, kur: 4575, kumk: 3371, smeSwadana: 1000, total: 15000 }
-  ]
+function parseRealisasiData(text) {
+  console.log('Parsing Realisasi data from PDF text...')
+  
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+  const dailyData = []
+  
+  // Pattern untuk parse daily data
+  // Format: Tanggal | KUR | KUMK | SME Swadana | Total
+  for (const line of lines) {
+    const dateMatch = line.match(/^(\d{1,2})\s/)
+    if (dateMatch) {
+      const numbers = extractNumbers(line)
+      if (numbers.length >= 4) {
+        dailyData.push({
+          date: numbers[0],
+          kur: numbers[1] || 0,
+          kumk: numbers[2] || 0,
+          smeSwadana: numbers[3] || 0,
+          total: (numbers[1] || 0) + (numbers[2] || 0) + (numbers[3] || 0)
+        })
+      }
+    }
+  }
+  
+  // Calculate monthly totals
+  const totalJan = dailyData.reduce((sum, day) => sum + day.total, 0)
   
   const monthlyTotals = {
-    nov: 152742,
-    dec: 1052306,
-    jan: dailyData.reduce((sum, day) => sum + day.total, 0)
+    nov: 152742, // Hardcoded for now
+    dec: 1052306, // Hardcoded for now
+    jan: totalJan
   }
   
-  return { dailyData, monthlyTotals }
+  console.log(`Parsed ${dailyData.length} daily records`)
+  
+  return {
+    type: 'realisasi',
+    dailyData,
+    monthlyTotals,
+    parsedAt: new Date().toISOString()
+  }
+}
+
+// Helper function to extract all numbers from a string
+function extractNumbers(text) {
+  // Remove common separators and extract numbers
+  const cleanText = text.replace(/\./g, '').replace(/,/g, '.')
+  const matches = cleanText.match(/\d+(?:\.\d+)?/g)
+  return matches ? matches.map(n => parseFloat(n)) : []
+}
+
+// Calculate total nasional from kanwil data
+function calculateTotalNasional(kanwilData) {
+  if (!kanwilData || kanwilData.length === 0) {
+    return {
+      kumk_des: 0, kumkPercent_des: 0,
+      kur_des: 0, kurPercent_des: 0,
+      total_des: 0, totalPercent_des: 0,
+      kumk_jan: 0, kumkPercent_jan: 0,
+      kur_jan: 0, kurPercent_jan: 0,
+      total_jan: 0, totalPercent_jan: 0,
+    }
+  }
+  
+  const totals = {
+    kumk_des: 0, kur_des: 0, total_des: 0,
+    kumk_jan: 0, kur_jan: 0, total_jan: 0,
+  }
+  
+  kanwilData.forEach(k => {
+    totals.kumk_des += k.kumk_des || 0
+    totals.kur_des += k.kur_des || 0
+    totals.total_des += k.total_des || 0
+    totals.kumk_jan += k.kumk_jan || 0
+    totals.kur_jan += k.kur_jan || 0
+    totals.total_jan += k.total_jan || 0
+  })
+  
+  // Calculate average percentages
+  const count = kanwilData.length
+  const avgPercentDes = kanwilData.reduce((sum, k) => sum + (k.totalPercent_des || 0), 0) / count
+  const avgPercentJan = kanwilData.reduce((sum, k) => sum + (k.totalPercent_jan || 0), 0) / count
+  
+  return {
+    kumk_des: totals.kumk_des,
+    kumkPercent_des: avgPercentDes * 0.6, // Approximate
+    kur_des: totals.kur_des,
+    kurPercent_des: avgPercentDes * 0.4, // Approximate
+    total_des: totals.total_des,
+    totalPercent_des: avgPercentDes,
+    kumk_jan: totals.kumk_jan,
+    kumkPercent_jan: avgPercentJan * 0.6,
+    kur_jan: totals.kur_jan,
+    kurPercent_jan: avgPercentJan * 0.4,
+    total_jan: totals.total_jan,
+    totalPercent_jan: avgPercentJan,
+  }
 }

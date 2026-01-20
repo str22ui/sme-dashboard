@@ -263,17 +263,17 @@ export default function KanwilDetail({ data, kanwilIndex }) {
                 label={renderValueLabel('#3B82F6', 'top')}
               />
               
-              {/* Total NPL - Desember (Blue Dashed) */}
+              {/* Total NPL - Desember (Blue Dotted) */}
               <Line 
                 type="monotone"
                 dataKey="total_des" 
                 stroke="#3B82F6"
                 strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={{ fill: '#3B82F6', r: 4, strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 6 }}
+                strokeDasharray="2 4"
+                dot={{ fill: '#fff', r: 5, strokeWidth: 2, stroke: '#3B82F6' }}
+                activeDot={{ r: 7 }}
                 name="total_des"
-                label={renderValueLabel('#3B82F6', 'bottom')}
+                label={renderValueLabel('#60A5FA', 'bottom')}
               />
               
               {/* KUMK - Januari (Green Solid) */}
@@ -288,15 +288,15 @@ export default function KanwilDetail({ data, kanwilIndex }) {
                 label={renderValueLabel('#10B981', 'top')}
               />
               
-              {/* KUMK - Desember (Green Dashed) */}
+              {/* KUMK - Desember (Green Dotted) */}
               <Line 
                 type="monotone"
                 dataKey="kumk_des" 
                 stroke="#10B981"
                 strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={{ fill: '#10B981', r: 4, strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 6 }}
+                strokeDasharray="2 4"
+                dot={{ fill: '#fff', r: 5, strokeWidth: 2, stroke: '#10B981' }}
+                activeDot={{ r: 7 }}
                 name="kumk_des"
               />
               
@@ -312,15 +312,15 @@ export default function KanwilDetail({ data, kanwilIndex }) {
                 label={renderValueLabel('#F97316', 'top')}
               />
               
-              {/* KUR - Desember (Orange Dashed) */}
+              {/* KUR - Desember (Orange Dotted) */}
               <Line 
                 type="monotone"
                 dataKey="kur_des" 
                 stroke="#F97316"
                 strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={{ fill: '#F97316', r: 4, strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 6 }}
+                strokeDasharray="2 4"
+                dot={{ fill: '#fff', r: 5, strokeWidth: 2, stroke: '#F97316' }}
+                activeDot={{ r: 7 }}
                 name="kur_des"
               />
             </LineChart>
@@ -348,18 +348,24 @@ export default function KanwilDetail({ data, kanwilIndex }) {
               </div>
               
               <div>
-                <div className="text-xs font-bold text-gray-600 mb-2">13 Des 2025 (Dashed)</div>
+                <div className="text-xs font-bold text-gray-600 mb-2">13 Des 2025 (Dotted)</div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-0.5 border-t-2 border-dashed border-blue-500"></div>
+                    <svg width="32" height="2">
+                      <line x1="0" y1="1" x2="32" y2="1" stroke="#3B82F6" strokeWidth="2" strokeDasharray="2 4"/>
+                    </svg>
                     <span className="text-xs font-medium text-gray-700">Total NPL</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-0.5 border-t-2 border-dashed border-green-500"></div>
+                    <svg width="32" height="2">
+                      <line x1="0" y1="1" x2="32" y2="1" stroke="#10B981" strokeWidth="2" strokeDasharray="2 4"/>
+                    </svg>
                     <span className="text-xs font-medium text-gray-700">KUMK</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-0.5 border-t-2 border-dashed border-orange-500"></div>
+                    <svg width="32" height="2">
+                      <line x1="0" y1="1" x2="32" y2="1" stroke="#F97316" strokeWidth="2" strokeDasharray="2 4"/>
+                    </svg>
                     <span className="text-xs font-medium text-gray-700">KUR</span>
                   </div>
                 </div>
