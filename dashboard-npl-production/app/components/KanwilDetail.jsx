@@ -251,11 +251,18 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                     <td className="py-2 px-2">{i+1}</td>
                     <td className="py-2 px-2 font-medium">{c.name}</td>
                     <td className="py-2 px-2 text-right">{formatCurrency(c.total)}</td>
-                    <td className={`py-2 px-2 text-right font-semibold ${
-                      c.totalPercent > 5 ? 'text-red-600' :
-                      c.totalPercent > 3 ? 'text-orange-600' :
-                      'text-blue-600'
-                    }`}>{formatPercent(c.totalPercent)}%<td>
+                    <td
+                  className={`py-2 px-2 text-right font-semibold ${
+                    c.totalPercent > 5
+                      ? 'text-red-600'
+                      : c.totalPercent > 3
+                      ? 'text-orange-600'
+                      : 'text-blue-600'
+                  }`}
+                >
+                  {formatPercent(c.totalPercent)}%
+                </td>
+
                   </tr>
                 ))}
               </tbody>
