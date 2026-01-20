@@ -2,6 +2,11 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
+const formatPercent = (value) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num.toFixed(2) : '0.00'
+}
+
 export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -151,8 +156,8 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                 Rp {formatCurrency(kanwilSummary?.total_jan ?? 0)}
               </div>
               <div className="text-lg text-blue-600 font-bold">
-                {(kanwilSummary?.totalPercent_jan ?? 0).toFixed(2)}%
-              </div>
+               {formatPercent(kanwilSummary?.totalPercent_jan)}%
+
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1 font-medium">13 Des 2025</div>
@@ -160,7 +165,7 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                 Rp {formatCurrency(kanwilSummary?.total_des ?? 0)}
               </div>
               <div className="text-sm text-gray-600 font-semibold">
-                {(kanwilSummary?.totalPercent_des ?? 0).toFixed(2)}%
+                {formatPercent(kanwilSummary?.totalPercent_jan)}%
               </div>
             </div>
           </div>
@@ -179,7 +184,7 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                 Rp {formatCurrency(kanwilSummary?.kumk_jan ?? 0)}
               </div>
               <div className="text-lg text-green-600 font-bold">
-                {(kanwilSummary?.kumkPercent_jan ?? 0).toFixed(2)}%
+                {formatPercent(kanwilSummary?.kumkPercent_jan)}%
               </div>
             </div>
             <div>
@@ -188,7 +193,7 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                 Rp {formatCurrency(kanwilSummary?.kumk_des ?? 0)}
               </div>
               <div className="text-sm text-gray-600 font-semibold">
-                {(kanwilSummary?.kumkPercent_des ?? 0).toFixed(2)}%
+                {{formatPercent(kanwilSummary?.kumkPercent_des)}%
               </div>
             </div>
           </div>
@@ -207,7 +212,7 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                 Rp {formatCurrency(kanwilSummary?.kur_jan ?? 0)}
               </div>
               <div className="text-lg text-orange-600 font-bold">
-                {(kanwilSummary?.kurPercent_jan ?? 0).toFixed(2)}%
+                {formatPercent(kanwilSummary?.kurPercent_jan)}%
               </div>
             </div>
             <div>
@@ -216,7 +221,7 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                 Rp {formatCurrency(kanwilSummary?.kur_des ?? 0)}
               </div>
               <div className="text-sm text-gray-600 font-semibold">
-                {(kanwilSummary?.kurPercent_des ?? 0).toFixed(2)}%
+                {formatPercent(kanwilSummary?.kurPercent_des)}%
               </div>
             </div>
           </div>
@@ -250,7 +255,7 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
                       c.totalPercent > 5 ? 'text-red-600' :
                       c.totalPercent > 3 ? 'text-orange-600' :
                       'text-blue-600'
-                    }`}>{c.totalPercent.toFixed(2)}%</td>
+                    }`}>{formatPercent(c.totalPercent)}%<td>
                   </tr>
                 ))}
               </tbody>
