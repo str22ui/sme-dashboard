@@ -144,32 +144,34 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
         <div className="grid grid-cols-3 gap-4">
           {/* Total NPL */}
           <div className="border-l-4 border-blue-600 bg-white p-4 shadow">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <span className="text-xl font-bold text-blue-600">Σ</span>
-              </div>
-              <div className="text-sm font-bold text-gray-700">Total NPL</div>
-            </div>
-            <div className="mb-3 pb-3 border-b border-gray-200">
-              <div className="text-xs text-gray-500 mb-1 font-medium">13 Jan 2026</div>
-              <div className="text-2xl font-bold text-gray-900">
-                Rp {formatCurrency(kanwilSummary?.total_jan ?? 0)}
-              </div>
-              <div className="text-lg text-blue-600 font-bold">
-               {formatPercent(kanwilSummary?.totalPercent_jan)}%
+  <div className="flex items-center gap-2 mb-3">
+    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+      <span className="text-xl font-bold text-blue-600">Σ</span>
+    </div>
+    <div className="text-sm font-bold text-gray-700">Total NPL</div>
+  </div>
 
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 mb-1 font-medium">13 Des 2025</div>
-              <div className="text-xl font-bold text-gray-700">
-                Rp {formatCurrency(kanwilSummary?.total_des ?? 0)}
-              </div>
-              <div className="text-sm text-gray-600 font-semibold">
-                {formatPercent(kanwilSummary?.totalPercent_jan)}%
-              </div>
-            </div>
-          </div>
-          
+  <div className="mb-3 pb-3 border-b border-gray-200">
+    <div className="text-xs text-gray-500 mb-1 font-medium">13 Jan 2026</div>
+    <div className="text-2xl font-bold text-gray-900">
+      Rp {formatCurrency(kanwilSummary?.total_jan ?? 0)}
+    </div>
+    <div className="text-lg text-blue-600 font-bold">
+      {formatPercent(kanwilSummary?.totalPercent_jan)}%
+    </div>
+  </div>
+
+  <div>
+    <div className="text-xs text-gray-500 mb-1 font-medium">13 Des 2025</div>
+    <div className="text-xl font-bold text-gray-700">
+      Rp {formatCurrency(kanwilSummary?.total_des ?? 0)}
+    </div>
+    <div className="text-sm text-gray-600 font-semibold">
+      {formatPercent(kanwilSummary?.totalPercent_jan)}%
+    </div>
+  </div>
+</div>
+
           {/* KUMK */}
           <div className="border-l-4 border-green-500 bg-white p-4 shadow">
             <div className="flex items-center gap-2 mb-3">
