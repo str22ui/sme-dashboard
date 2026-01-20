@@ -70,31 +70,36 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
   
   const kanwilNames = ['Jakarta I', 'Jakarta II', 'Jateng DIY', 'Jabanus', 'Jawa Barat', 'Kalimantan', 'Sulampua', 'Sumatera 1', 'Sumatera 2']
   const currentKanwil = kanwilNames[kanwilIndex - 1]
-  const kanwilSummary = data.kanwilData.find(k => k.name === currentKanwil)
-  const cabangList = data.cabangData.filter(c => c.kanwil === currentKanwil)
+  
+  // Safe access to kanwilData and cabangData
+  const kanwilSummary = (data.kanwilData || []).find(k => k?.name === currentKanwil)
+  const cabangList = (data.cabangData || []).filter(c => c?.kanwil === currentKanwil)
   
   if (!kanwilSummary) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <p className="text-gray-600">Kanwil not found</p>
+        <div className="text-center">
+          <p className="text-gray-600 mb-2">Kanwil "{currentKanwil}" not found</p>
+          <p className="text-sm text-gray-400">Available kanwil: {(data.kanwilData || []).map(k => k?.name).join(', ')}</p>
+        </div>
       </div>
     )
   }
   
-  // Use data with both periods
+  // Use data with both periods - with safe fallbacks
   const cabangWithData = cabangList.map(c => ({
-    name: c.name,
+    name: c?.name || 'Unknown',
     // Januari
-    kumk: c.kumk_jan || 0,
-    kumkPercent: c.kumkPercent_jan || 0,
-    kur: c.kur_jan || 0,
-    kurPercent: c.kurPercent_jan || 0,
-    total: c.total_jan || 0,
-    totalPercent: c.totalPercent_jan || 0,
+    kumk: c?.kumk_jan ?? c?.kumk ?? 0,
+    kumkPercent: c?.kumkPercent_jan ?? c?.kumkPercent ?? 0,
+    kur: c?.kur_jan ?? c?.kur ?? 0,
+    kurPercent: c?.kurPercent_jan ?? c?.kurPercent ?? 0,
+    total: c?.total_jan ?? c?.total ?? 0,
+    totalPercent: c?.totalPercent_jan ?? c?.totalPercent ?? 0,
     // Desember
-    total_des: c.total_des || 0,
-    kumk_des: c.kumk_des || 0,
-    kur_des: c.kur_des || 0,
+    total_des: c?.total_des ?? c?.total ?? 0,
+    kumk_des: c?.kumk_des ?? c?.kumk ?? 0,
+    kur_des: c?.kur_des ?? c?.kur ?? 0,
   }))
   
   // Sort by total NPL descending
@@ -143,19 +148,19 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
             <div className="mb-3 pb-3 border-b border-gray-200">
               <div className="text-xs text-gray-500 mb-1 font-medium">13 Jan 2026</div>
               <div className="text-2xl font-bold text-gray-900">
-                Rp {formatCurrency(kanwilSummary.total_jan || 0)}
+                Rp {formatCurrency(kanwilSummary?.total_jan ?? 0)}
               </div>
               <div className="text-lg text-blue-600 font-bold">
-                {(kanwilSummary.totalPercent_jan || 0).toFixed(2)}%
+                {(kanwilSummary?.totalPercent_jan ?? 0).toFixed(2)}%
               </div>
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1 font-medium">13 Des 2025</div>
               <div className="text-xl font-bold text-gray-700">
-                Rp {formatCurrency(kanwilSummary.total_des || 0)}
+                Rp {formatCurrency(kanwilSummary?.total_des ?? 0)}
               </div>
               <div className="text-sm text-gray-600 font-semibold">
-                {(kanwilSummary.totalPercent_des || 0).toFixed(2)}%
+                {(kanwilSummary?.totalPercent_des ?? 0).toFixed(2)}%
               </div>
             </div>
           </div>
@@ -171,19 +176,19 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
             <div className="mb-3 pb-3 border-b border-gray-200">
               <div className="text-xs text-gray-500 mb-1 font-medium">13 Jan 2026</div>
               <div className="text-2xl font-bold text-gray-900">
-                Rp {formatCurrency(kanwilSummary.kumk_jan || 0)}
+                Rp {formatCurrency(kanwilSummary?.kumk_jan ?? 0)}
               </div>
               <div className="text-lg text-green-600 font-bold">
-                {(kanwilSummary.kumkPercent_jan || 0).toFixed(2)}%
+                {(kanwilSummary?.kumkPercent_jan ?? 0).toFixed(2)}%
               </div>
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1 font-medium">13 Des 2025</div>
               <div className="text-xl font-bold text-gray-700">
-                Rp {formatCurrency(kanwilSummary.kumk_des || 0)}
+                Rp {formatCurrency(kanwilSummary?.kumk_des ?? 0)}
               </div>
               <div className="text-sm text-gray-600 font-semibold">
-                {(kanwilSummary.kumkPercent_des || 0).toFixed(2)}%
+                {(kanwilSummary?.kumkPercent_des ?? 0).toFixed(2)}%
               </div>
             </div>
           </div>
@@ -199,19 +204,19 @@ export default function KanwilDetail({ kanwilIndex, dataType = 'npl' }) {
             <div className="mb-3 pb-3 border-b border-gray-200">
               <div className="text-xs text-gray-500 mb-1 font-medium">13 Jan 2026</div>
               <div className="text-2xl font-bold text-gray-900">
-                Rp {formatCurrency(kanwilSummary.kur_jan || 0)}
+                Rp {formatCurrency(kanwilSummary?.kur_jan ?? 0)}
               </div>
               <div className="text-lg text-orange-600 font-bold">
-                {(kanwilSummary.kurPercent_jan || 0).toFixed(2)}%
+                {(kanwilSummary?.kurPercent_jan ?? 0).toFixed(2)}%
               </div>
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1 font-medium">13 Des 2025</div>
               <div className="text-xl font-bold text-gray-700">
-                Rp {formatCurrency(kanwilSummary.kur_des || 0)}
+                Rp {formatCurrency(kanwilSummary?.kur_des ?? 0)}
               </div>
               <div className="text-sm text-gray-600 font-semibold">
-                {(kanwilSummary.kurPercent_des || 0).toFixed(2)}%
+                {(kanwilSummary?.kurPercent_des ?? 0).toFixed(2)}%
               </div>
             </div>
           </div>
