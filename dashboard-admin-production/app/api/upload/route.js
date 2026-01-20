@@ -1,9 +1,14 @@
 import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
-import pdf from 'pdf-parse/lib/pdf-parse.js'
+
+export const runtime = 'nodejs'
 
 export async function POST(request) {
   try {
+    // 1️⃣ LAZY IMPORT (sendiri, satu baris)
+    const { default: pdf } = await import('pdf-parse')
+
+    // 2️⃣ VALIDASI ENV (if terpisah)
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       console.error('BLOB_READ_WRITE_TOKEN not found')
       return NextResponse.json(
@@ -11,7 +16,7 @@ export async function POST(request) {
         { status: 500 }
       )
     }
-    
+
     const formData = await request.formData()
     
     const nplFile = formData.get('npl')
