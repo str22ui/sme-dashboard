@@ -6,27 +6,20 @@ export async function GET(request, { params }) {
   const { type, file } = params
   
   try {
-    // In production, construct Blob URL from environment variable
-    const blobUrl = process.env.BLOB_READ_WRITE_TOKEN 
-      ? `https://${process.env.BLOB_READ_WRITE_TOKEN.split('_')[1]}.public.blob.vercel-storage.com`
-      : process.env.NEXT_PUBLIC_BLOB_URL
+    // Direct Blob URL (from Blob storage settings)
+    const blobBaseUrl = 'https://pgrnuw5fcdcfjo0d.public.blob.vercel-storage.com'
+    const blobUrl = `${blobBaseUrl}/${type}_${file}.json`
     
-    if (!blobUrl) {
-      return NextResponse.json(
-        { error: 'Blob storage not configured' },
-        { status: 500 }
-      )
-    }
+    console.log('Fetching from Blob:', blobUrl)
     
-    const url = `${blobUrl}/${type}_${file}.json`
-    
-    const response = await fetch(url, {
+    const response = await fetch(blobUrl, {
       cache: 'no-store',
     })
     
     if (!response.ok) {
+      console.error('Blob fetch failed:', response.status, response.statusText)
       return NextResponse.json(
-        { error: 'Data not found' },
+        { error: `Data not found: ${type}_${file}.json` },
         { status: 404 }
       )
     }
@@ -40,6 +33,7 @@ export async function GET(request, { params }) {
     })
     
   } catch (error) {
+    console.error('Data fetch error:', error)
     return NextResponse.json(
       { error: error.message },
       { status: 500 }
