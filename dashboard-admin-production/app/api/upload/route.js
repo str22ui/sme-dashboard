@@ -5,8 +5,8 @@ export const runtime = 'nodejs'
 
 export async function POST(request) {
   try {
-    // 1️⃣ LAZY IMPORT (sendiri, satu baris)
-    const { default: pdf } = await import('pdf-parse')
+    // ✅ FIX: Import from lib/pdf-parse.js to avoid test file issue
+    const pdf = (await import('pdf-parse/lib/pdf-parse.js')).default
 
     // 2️⃣ VALIDASI ENV (if terpisah)
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
