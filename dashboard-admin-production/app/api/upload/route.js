@@ -3,14 +3,10 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request) {
   try {
-    // Check if Blob storage is configured
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      console.error('BLOB_READ_WRITE_TOKEN not found in environment variables')
+      console.error('BLOB_READ_WRITE_TOKEN not found')
       return NextResponse.json(
-        { 
-          error: 'Blob storage not configured. Please create Blob storage in Vercel dashboard.',
-          details: 'Go to Storage tab → Create Database → Blob'
-        },
+        { error: 'Blob storage not configured' },
         { status: 500 }
       )
     }
@@ -38,7 +34,6 @@ export async function POST(request) {
     
     console.log('Generating mock data...')
     
-    // Generate mock data (same structure as development)
     const mockNPLData = generateMockNPLData()
     const mockKOL2Data = generateMockKOL2Data()
     const mockRealisasiData = generateMockRealisasiData()
@@ -46,40 +41,53 @@ export async function POST(request) {
     console.log('Uploading to Vercel Blob...')
     
     try {
-      // Upload NPL metadata
+      // Upload with FIXED NAMES (no hash)
       const nplMetadata = await put('npl_metadata.json', JSON.stringify({
         filename: nplFile.name,
         uploadDate,
         fileSize: nplFile.size
-      }), { access: 'public' })
+      }), { 
+        access: 'public',
+        addRandomSuffix: false  // IMPORTANT: No hash!
+      })
       console.log('NPL metadata uploaded:', nplMetadata.url)
       
-      // Upload NPL parsed data
-      const nplParsed = await put('npl_parsed.json', JSON.stringify(mockNPLData), { access: 'public' })
+      const nplParsed = await put('npl_parsed.json', JSON.stringify(mockNPLData), { 
+        access: 'public',
+        addRandomSuffix: false  // IMPORTANT: No hash!
+      })
       console.log('NPL parsed uploaded:', nplParsed.url)
       
-      // Upload KOL2 metadata
       const kol2Metadata = await put('kol2_metadata.json', JSON.stringify({
         filename: kol2File.name,
         uploadDate,
         fileSize: kol2File.size
-      }), { access: 'public' })
+      }), { 
+        access: 'public',
+        addRandomSuffix: false
+      })
       console.log('KOL2 metadata uploaded:', kol2Metadata.url)
       
-      // Upload KOL2 parsed data
-      const kol2Parsed = await put('kol2_parsed.json', JSON.stringify(mockKOL2Data), { access: 'public' })
+      const kol2Parsed = await put('kol2_parsed.json', JSON.stringify(mockKOL2Data), { 
+        access: 'public',
+        addRandomSuffix: false
+      })
       console.log('KOL2 parsed uploaded:', kol2Parsed.url)
       
-      // Upload Realisasi metadata
       const realisasiMetadata = await put('realisasi_metadata.json', JSON.stringify({
         filename: realisasiFile.name,
         uploadDate,
         fileSize: realisasiFile.size
-      }), { access: 'public' })
+      }), { 
+        access: 'public',
+        addRandomSuffix: false
+      })
       console.log('Realisasi metadata uploaded:', realisasiMetadata.url)
       
-      // Upload Realisasi parsed data
-      const realisasiParsed = await put('realisasi_parsed.json', JSON.stringify(mockRealisasiData), { access: 'public' })
+      const realisasiParsed = await put('realisasi_parsed.json', JSON.stringify(mockRealisasiData), { 
+        access: 'public',
+        addRandomSuffix: false
+      })
       console.log('Realisasi parsed uploaded:', realisasiParsed.url)
       
       console.log('All files uploaded successfully!')
@@ -98,10 +106,7 @@ export async function POST(request) {
     } catch (blobError) {
       console.error('Blob upload error:', blobError)
       return NextResponse.json(
-        { 
-          error: 'Failed to upload to Blob storage',
-          details: blobError.message 
-        },
+        { error: 'Failed to upload to Blob storage', details: blobError.message },
         { status: 500 }
       )
     }
@@ -109,16 +114,13 @@ export async function POST(request) {
   } catch (error) {
     console.error('Upload error:', error)
     return NextResponse.json(
-      { 
-        error: 'Upload failed',
-        details: error.message 
-      },
+      { error: 'Upload failed', details: error.message },
       { status: 500 }
     )
   }
 }
 
-// Mock data generators
+// Mock data generators (same as before)
 function generateMockNPLData() {
   const kanwilList = [
     'Jakarta I', 'Jakarta II', 'Jateng DIY', 'Jabanus',
