@@ -1,9 +1,10 @@
-# dependencies
+# ignore all node_modules everywhere
 node_modules
+**/node_modules
 
-# next.js
+# next
 .next
-out
+**/.next
 
 # env
 .env
