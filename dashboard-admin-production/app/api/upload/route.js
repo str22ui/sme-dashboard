@@ -3,11 +3,29 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request) {
   try {
+    // Check if Blob storage is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error('BLOB_READ_WRITE_TOKEN not found in environment variables')
+      return NextResponse.json(
+        { 
+          error: 'Blob storage not configured. Please create Blob storage in Vercel dashboard.',
+          details: 'Go to Storage tab → Create Database → Blob'
+        },
+        { status: 500 }
+      )
+    }
+    
     const formData = await request.formData()
     
     const nplFile = formData.get('npl')
     const kol2File = formData.get('kol2')
     const realisasiFile = formData.get('realisasi')
+    
+    console.log('Files received:', {
+      npl: nplFile?.name,
+      kol2: kol2File?.name,
+      realisasi: realisasiFile?.name
+    })
     
     if (!nplFile || !kol2File || !realisasiFile) {
       return NextResponse.json(
@@ -18,54 +36,89 @@ export async function POST(request) {
     
     const uploadDate = new Date().toISOString()
     
-    // For MVP: Use mock data (same structure as development)
-    // TODO: Replace with real PDF parsing using pdf-parse library
+    console.log('Generating mock data...')
     
+    // Generate mock data (same structure as development)
     const mockNPLData = generateMockNPLData()
     const mockKOL2Data = generateMockKOL2Data()
     const mockRealisasiData = generateMockRealisasiData()
     
-    // Upload to Vercel Blob
-    await put('npl_metadata.json', JSON.stringify({
-      filename: nplFile.name,
-      uploadDate,
-      fileSize: nplFile.size
-    }), { access: 'public' })
+    console.log('Uploading to Vercel Blob...')
     
-    await put('npl_parsed.json', JSON.stringify(mockNPLData), { access: 'public' })
-    
-    await put('kol2_metadata.json', JSON.stringify({
-      filename: kol2File.name,
-      uploadDate,
-      fileSize: kol2File.size
-    }), { access: 'public' })
-    
-    await put('kol2_parsed.json', JSON.stringify(mockKOL2Data), { access: 'public' })
-    
-    await put('realisasi_metadata.json', JSON.stringify({
-      filename: realisasiFile.name,
-      uploadDate,
-      fileSize: realisasiFile.size
-    }), { access: 'public' })
-    
-    await put('realisasi_parsed.json', JSON.stringify(mockRealisasiData), { access: 'public' })
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Files uploaded successfully',
-      uploadDate
-    })
+    try {
+      // Upload NPL metadata
+      const nplMetadata = await put('npl_metadata.json', JSON.stringify({
+        filename: nplFile.name,
+        uploadDate,
+        fileSize: nplFile.size
+      }), { access: 'public' })
+      console.log('NPL metadata uploaded:', nplMetadata.url)
+      
+      // Upload NPL parsed data
+      const nplParsed = await put('npl_parsed.json', JSON.stringify(mockNPLData), { access: 'public' })
+      console.log('NPL parsed uploaded:', nplParsed.url)
+      
+      // Upload KOL2 metadata
+      const kol2Metadata = await put('kol2_metadata.json', JSON.stringify({
+        filename: kol2File.name,
+        uploadDate,
+        fileSize: kol2File.size
+      }), { access: 'public' })
+      console.log('KOL2 metadata uploaded:', kol2Metadata.url)
+      
+      // Upload KOL2 parsed data
+      const kol2Parsed = await put('kol2_parsed.json', JSON.stringify(mockKOL2Data), { access: 'public' })
+      console.log('KOL2 parsed uploaded:', kol2Parsed.url)
+      
+      // Upload Realisasi metadata
+      const realisasiMetadata = await put('realisasi_metadata.json', JSON.stringify({
+        filename: realisasiFile.name,
+        uploadDate,
+        fileSize: realisasiFile.size
+      }), { access: 'public' })
+      console.log('Realisasi metadata uploaded:', realisasiMetadata.url)
+      
+      // Upload Realisasi parsed data
+      const realisasiParsed = await put('realisasi_parsed.json', JSON.stringify(mockRealisasiData), { access: 'public' })
+      console.log('Realisasi parsed uploaded:', realisasiParsed.url)
+      
+      console.log('All files uploaded successfully!')
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Files uploaded successfully',
+        uploadDate,
+        urls: {
+          npl: nplParsed.url,
+          kol2: kol2Parsed.url,
+          realisasi: realisasiParsed.url
+        }
+      })
+      
+    } catch (blobError) {
+      console.error('Blob upload error:', blobError)
+      return NextResponse.json(
+        { 
+          error: 'Failed to upload to Blob storage',
+          details: blobError.message 
+        },
+        { status: 500 }
+      )
+    }
     
   } catch (error) {
     console.error('Upload error:', error)
     return NextResponse.json(
-      { error: error.message },
+      { 
+        error: 'Upload failed',
+        details: error.message 
+      },
       { status: 500 }
     )
   }
 }
 
-// Mock data generators (same as development)
+// Mock data generators
 function generateMockNPLData() {
   const kanwilList = [
     'Jakarta I', 'Jakarta II', 'Jateng DIY', 'Jabanus',
