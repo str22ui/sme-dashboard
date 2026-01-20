@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function AdminPage() {
   const [nplFile, setNplFile] = useState(null)
@@ -16,7 +16,7 @@ export default function AdminPage() {
   })
 
   // Fetch current data status on mount
-  useState(() => {
+  useEffect(() => {
     fetchCurrentStatus()
   }, [])
 
