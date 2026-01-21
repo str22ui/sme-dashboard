@@ -4,13 +4,6 @@ import { NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 seconds for hobby plan
 
-// IMPORTANT: Tell Next.js to not parse the body (we'll handle FormData ourselves)
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
-
 // Dynamic import XLSX to avoid edge runtime issues
 let XLSX
 async function getXLSX() {
