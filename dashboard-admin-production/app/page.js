@@ -166,7 +166,7 @@ export default function AdminPage() {
             </label>
             <input
               type="file"
-              accept=".pdf"
+              accept=".xlsx,.xls"
               onChange={(e) => setNplFile(e.target.files[0])}
               className="block w-full text-sm text-gray-500
                 file:mr-4 file:py-2 file:px-4
@@ -187,7 +187,7 @@ export default function AdminPage() {
             </label>
             <input
               type="file"
-              accept=".pdf"
+              accept=".xlsx,.xls"
               onChange={(e) => setKol2File(e.target.files[0])}
               className="block w-full text-sm text-gray-500
                 file:mr-4 file:py-2 file:px-4
@@ -208,7 +208,7 @@ export default function AdminPage() {
             </label>
             <input
               type="file"
-              accept=".pdf"
+              accept=".xlsx,.xls"
               onChange={(e) => setRealisasiFile(e.target.files[0])}
               className="block w-full text-sm text-gray-500
                 file:mr-4 file:py-2 file:px-4
