@@ -12,6 +12,9 @@ export default function UploadPage() {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
+  // Check if at least one file is selected
+  const hasFiles = files.npl !== null || files.kol2 !== null || files.realisasi !== null
+
   const handleFileChange = (type, e) => {
     const file = e.target.files?.[0]
     if (file) {
