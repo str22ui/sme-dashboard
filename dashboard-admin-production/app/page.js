@@ -24,9 +24,9 @@ export default function UploadPage() {
     setError(null)
     setSuccess(null)
 
-    // Validate files
-    if (!files.npl || !files.kol2 || !files.realisasi) {
-      setError('Please select all 3 Excel files')
+    // Validate files - allow partial upload for testing
+    if (!files.npl && !files.kol2 && !files.realisasi) {
+      setError('Please select at least one Excel file')
       return
     }
 
@@ -34,15 +34,17 @@ export default function UploadPage() {
 
     try {
       const formData = new FormData()
-      formData.append('npl', files.npl)
-      formData.append('kol2', files.kol2)
-      formData.append('realisasi', files.realisasi)
+      
+      // Only append files that are selected
+      if (files.npl) formData.append('npl', files.npl)
+      if (files.kol2) formData.append('kol2', files.kol2)
+      if (files.realisasi) formData.append('realisasi', files.realisasi)
 
       console.log('📤 Uploading files...')
       console.log('Files:', {
-        npl: files.npl.name,
-        kol2: files.kol2.name,
-        realisasi: files.realisasi.name
+        npl: files.npl ? `${files.npl.name} (${(files.npl.size / 1024 / 1024).toFixed(2)} MB)` : 'Not selected',
+        kol2: files.kol2 ? `${files.kol2.name} (${(files.kol2.size / 1024 / 1024).toFixed(2)} MB)` : 'Not selected',
+        realisasi: files.realisasi ? `${files.realisasi.name} (${(files.realisasi.size / 1024 / 1024).toFixed(2)} MB)` : 'Not selected'
       })
 
       const response = await fetch('/api/upload', {

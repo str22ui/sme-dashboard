@@ -41,82 +41,100 @@ export async function POST(request) {
     const realisasiFile = formData.get('realisasi')
     
     console.log('Files received:', {
-      npl: nplFile?.name,
-      kol2: kol2File?.name,
-      realisasi: realisasiFile?.name
+      npl: nplFile ? `${nplFile.name} (${(nplFile.size / 1024 / 1024).toFixed(2)} MB)` : 'Not provided',
+      kol2: kol2File ? `${kol2File.name} (${(kol2File.size / 1024 / 1024).toFixed(2)} MB)` : 'Not provided',
+      realisasi: realisasiFile ? `${realisasiFile.name} (${(realisasiFile.size / 1024 / 1024).toFixed(2)} MB)` : 'Not provided'
     })
     
-    if (!nplFile || !kol2File || !realisasiFile) {
+    if (!nplFile && !kol2File && !realisasiFile) {
       return NextResponse.json(
-        { error: 'All 3 Excel files are required' },
+        { error: 'At least one Excel file is required' },
         { status: 400 }
       )
     }
     
     const uploadDate = new Date().toISOString()
     
-    console.log('Parsing NPL Excel...')
-    const nplBuffer = Buffer.from(await nplFile.arrayBuffer())
-    const nplData = await parseNPLExcel(nplBuffer, XLSX)
+    let nplData = null
+    let kol2Data = null
+    let realisasiData = null
     
-    console.log('Parsing KOL2 Excel...')
-    const kol2Buffer = Buffer.from(await kol2File.arrayBuffer())
-    const kol2Data = await parseKOL2Excel(kol2Buffer, XLSX)
+    if (nplFile) {
+      console.log('Parsing NPL Excel...')
+      const nplBuffer = Buffer.from(await nplFile.arrayBuffer())
+      nplData = await parseNPLExcel(nplBuffer, XLSX)
+    }
     
-    console.log('Parsing Realisasi Excel...')
-    const realisasiBuffer = Buffer.from(await realisasiFile.arrayBuffer())
-    const realisasiData = await parseRealisasiExcel(realisasiBuffer, XLSX)
+    if (kol2File) {
+      console.log('Parsing KOL2 Excel...')
+      const kol2Buffer = Buffer.from(await kol2File.arrayBuffer())
+      kol2Data = await parseKOL2Excel(kol2Buffer, XLSX)
+    }
+    
+    if (realisasiFile) {
+      console.log('Parsing Realisasi Excel...')
+      const realisasiBuffer = Buffer.from(await realisasiFile.arrayBuffer())
+      realisasiData = await parseRealisasiExcel(realisasiBuffer, XLSX)
+    }
     
     console.log('Uploading to Vercel Blob...')
     
     try {
-      const nplMetaBlob = await put('npl_metadata.json', JSON.stringify({
-        filename: nplFile.name,
-        uploadDate,
-        fileSize: nplFile.size
-      }), { 
-        access: 'public',
-        addRandomSuffix: false
-      })
-      console.log('✅ NPL metadata uploaded')
+      const uploadedUrls = {}
       
-      const nplDataBlob = await put('npl_parsed.json', JSON.stringify(nplData), { 
-        access: 'public',
-        addRandomSuffix: false
-      })
-      console.log('✅ NPL data uploaded')
+      if (nplFile && nplData) {
+        await put('npl_metadata.json', JSON.stringify({
+          filename: nplFile.name,
+          uploadDate,
+          fileSize: nplFile.size
+        }), { 
+          access: 'public',
+          addRandomSuffix: false
+        })
+        
+        const nplDataBlob = await put('npl_parsed.json', JSON.stringify(nplData), { 
+          access: 'public',
+          addRandomSuffix: false
+        })
+        uploadedUrls.nplData = nplDataBlob.url
+        console.log('✅ NPL data uploaded')
+      }
       
-      const kol2MetaBlob = await put('kol2_metadata.json', JSON.stringify({
-        filename: kol2File.name,
-        uploadDate,
-        fileSize: kol2File.size
-      }), { 
-        access: 'public',
-        addRandomSuffix: false
-      })
-      console.log('✅ KOL2 metadata uploaded')
+      if (kol2File && kol2Data) {
+        await put('kol2_metadata.json', JSON.stringify({
+          filename: kol2File.name,
+          uploadDate,
+          fileSize: kol2File.size
+        }), { 
+          access: 'public',
+          addRandomSuffix: false
+        })
+        
+        const kol2DataBlob = await put('kol2_parsed.json', JSON.stringify(kol2Data), { 
+          access: 'public',
+          addRandomSuffix: false
+        })
+        uploadedUrls.kol2Data = kol2DataBlob.url
+        console.log('✅ KOL2 data uploaded')
+      }
       
-      const kol2DataBlob = await put('kol2_parsed.json', JSON.stringify(kol2Data), { 
-        access: 'public',
-        addRandomSuffix: false
-      })
-      console.log('✅ KOL2 data uploaded')
-      
-      const realisasiMetaBlob = await put('realisasi_metadata.json', JSON.stringify({
-        filename: realisasiFile.name,
-        uploadDate,
-        fileSize: realisasiFile.size
-      }), { 
-        access: 'public',
-        addRandomSuffix: false
-      })
-      console.log('✅ Realisasi metadata uploaded')
-      
-      const realisasiDataBlob = await put('realisasi_parsed.json', JSON.stringify(realisasiData), { 
-        access: 'public',
-        addRandomSuffix: false
-      })
-      console.log('✅ Realisasi data uploaded')
+      if (realisasiFile && realisasiData) {
+        await put('realisasi_metadata.json', JSON.stringify({
+          filename: realisasiFile.name,
+          uploadDate,
+          fileSize: realisasiFile.size
+        }), { 
+          access: 'public',
+          addRandomSuffix: false
+        })
+        
+        const realisasiDataBlob = await put('realisasi_parsed.json', JSON.stringify(realisasiData), { 
+          access: 'public',
+          addRandomSuffix: false
+        })
+        uploadedUrls.realisasiData = realisasiDataBlob.url
+        console.log('✅ Realisasi data uploaded')
+      }
       
       console.log('All files uploaded successfully!')
       
@@ -125,17 +143,15 @@ export async function POST(request) {
         message: 'Files uploaded and parsed successfully',
         uploadDate,
         stats: {
-          nplCabang: nplData.cabangData?.length || 0,
-          kol2Cabang: kol2Data.cabangData?.length || 0,
-          realisasiDays: realisasiData.dailyData?.length || 0
+          nplCabang: nplData?.cabangData?.length || 0,
+          kol2Cabang: kol2Data?.cabangData?.length || 0,
+          realisasiDays: realisasiData?.dailyData?.length || 0
         },
-        urls: {
-          nplMeta: nplMetaBlob.url,
-          nplData: nplDataBlob.url,
-          kol2Meta: kol2MetaBlob.url,
-          kol2Data: kol2DataBlob.url,
-          realisasiMeta: realisasiMetaBlob.url,
-          realisasiData: realisasiDataBlob.url
+        urls: uploadedUrls
+      }, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
         }
       })
       
@@ -173,11 +189,26 @@ export async function POST(request) {
 
 // Add GET method for testing
 export async function GET() {
-  return NextResponse.json({
+  const response = NextResponse.json({
     status: 'API route is working',
     hasToken: !!process.env.BLOB_READ_WRITE_TOKEN,
     timestamp: new Date().toISOString()
   })
+  
+  // Add CORS headers
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type')
+  
+  return response
+}
+
+export async function OPTIONS() {
+  const response = new NextResponse(null, { status: 200 })
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type')
+  return response
 }
 
 // ============================================
