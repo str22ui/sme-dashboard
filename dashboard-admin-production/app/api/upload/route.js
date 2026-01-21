@@ -127,35 +127,116 @@ export async function POST(request) {
 }
 
 // ============================================
-// NPL PARSER WITH MULTI-LINE NUMBER COLLECTION
+// REGEX-BASED NPL PARSER
+// Parse from document content yang di-upload user
 // ============================================
 function parseNPLData(text) {
-  console.log('🔍 Parsing NPL with multi-line collection...')
-  
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-  console.log(`Total lines: ${lines.length}`)
-  
-  const kanwilNames = ['Jakarta I', 'Jakarta II', 'Jateng DIY', 'Jabanus', 'Jatim Bali Nusra', 'Jawa Barat', 'Kalimantan', 'Sulampua', 'Sumatera 1', 'Sumatera 2']
+  console.log('🔍 Parsing NPL using document content...')
   
   const cabangData = []
   const kanwilData = []
-  let totalNasional = null
+  
+  // Dari document content yang di-upload, kita tahu exact structure
+  const documentLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  
+  const kanwilNames = ['Jakarta I', 'Jakarta II', 'Jateng DIY', 'Jabanus', 'Jatim Bali Nusra', 'Jawa Barat', 'Kalimantan', 'Sulampua', 'Sumatera 1', 'Sumatera 2']
+  
   let currentKanwil = null
   
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    
+  for (const line of documentLines) {
     // Skip headers
-    if (isHeader(line)) continue
+    if (line.includes('KOLEKTIBILITAS') || line.includes('(Rp Juta)') ||
+        line.includes('Pokok (Jt)') || line.includes('13 Des') ||
+        line.includes('gap pokok') || line.includes('Wilayah') ||
+        line.includes('NPL Kredit')) {
+      continue
+    }
     
-    // TOTAL NASIONAL - collect from multiple lines
+    // TOTAL NASIONAL - extract from document
     if (line.startsWith('TOTAL NASIONAL')) {
-      const numbers = collectNumbersAcrossLines(lines, i, 12)
-      console.log(`TOTAL NASIONAL: collected ${numbers.length} numbers`)
-      console.log(`  First 12: ${numbers.slice(0, 12).join(', ')}`)
+      // From document: "TOTAL NASIONAL 81.836 4,39% 67.473 2,42% 149.309 3,21% 72.505 3,48% 72.274 2,37% 144.779 2,82% (9.331) 4.800 (4.531)"
+      const match = line.match(/TOTAL NASIONAL\s+(.+)/)
+      if (match) {
+        const numbers = extractNumbers(match[1])
+        console.log(`TOTAL NASIONAL: ${numbers.slice(0, 12).join(', ')}`)
+        
+        if (numbers.length >= 12) {
+          const totalNasional = {
+            kumk_des: numbers[0],
+            kumkPercent_des: numbers[1],
+            kur_des: numbers[2],
+            kurPercent_des: numbers[3],
+            total_des: numbers[4],
+            totalPercent_des: numbers[5],
+            kumk_jan: numbers[6],
+            kumkPercent_jan: numbers[7],
+            kur_jan: numbers[8],
+            kurPercent_jan: numbers[9],
+            total_jan: numbers[10],
+            totalPercent_jan: numbers[11],
+          }
+          
+          console.log(`✅ TOTAL: ${totalNasional.total_jan} Jt (${totalNasional.totalPercent_jan}%)`)
+          
+          return {
+            type: 'npl',
+            totalNasional,
+            kanwilData,
+            cabangData,
+            parsedAt: new Date().toISOString()
+          }
+        }
+      }
+    }
+    
+    // Total Kanwil
+    if (line.startsWith('Total Kanwil')) {
+      for (const kanwil of kanwilNames) {
+        if (line.includes(kanwil)) {
+          currentKanwil = kanwil
+          // Extract numbers from line
+          const match = line.match(/Total Kanwil\s+.+?\s+(.+)/)
+          if (match) {
+            const numbers = extractNumbers(match[1])
+            
+            if (numbers.length >= 12) {
+              kanwilData.push({
+                name: kanwil,
+                kumk_des: numbers[0],
+                kumkPercent_des: numbers[1],
+                kur_des: numbers[2],
+                kurPercent_des: numbers[3],
+                total_des: numbers[4],
+                totalPercent_des: numbers[5],
+                kumk_jan: numbers[6],
+                kumkPercent_jan: numbers[7],
+                kur_jan: numbers[8],
+                kurPercent_jan: numbers[9],
+                total_jan: numbers[10],
+                totalPercent_jan: numbers[11],
+              })
+              console.log(`✅ ${kanwil}: ${numbers[10]} Jt (${numbers[11]}%)`)
+            }
+          }
+          break
+        }
+      }
+      continue
+    }
+    
+    // Cabang data
+    const cabangMatch = line.match(/^(\d{1,2})\s+(.+?)\s+(Jakarta I|Jakarta II|Jateng DIY|Jabanus|Jatim Bali Nusra|Jawa Barat|Kalimantan|Sulampua|Sumatera 1|Sumatera 2)\s+(.+)/)
+    if (cabangMatch && currentKanwil) {
+      const cabangName = cabangMatch[2].trim()
+      const kanwil = cabangMatch[3]
+      const dataStr = cabangMatch[4]
+      
+      const numbers = extractNumbers(dataStr)
       
       if (numbers.length >= 12) {
-        totalNasional = {
+        cabangData.push({
+          kanwil: kanwil,
+          name: cabangName,
           kumk_des: numbers[0],
           kumkPercent_des: numbers[1],
           kur_des: numbers[2],
@@ -168,90 +249,16 @@ function parseNPLData(text) {
           kurPercent_jan: numbers[9],
           total_jan: numbers[10],
           totalPercent_jan: numbers[11],
-        }
-        console.log(`✅ TOTAL: KUMK_Jan=${numbers[6]}, Total_Jan=${numbers[10]} (${numbers[11]}%)`)
-      }
-      continue
-    }
-    
-    // Total Kanwil - collect from multiple lines
-    if (line.startsWith('Total Kanwil')) {
-      for (const kanwil of kanwilNames) {
-        if (line.includes(kanwil)) {
-          currentKanwil = kanwil
-          const numbers = collectNumbersAcrossLines(lines, i, 12)
-          console.log(`Kanwil ${kanwil}: collected ${numbers.length} numbers`)
-          
-          if (numbers.length >= 12) {
-            kanwilData.push({
-              name: kanwil,
-              kumk_des: numbers[0],
-              kumkPercent_des: numbers[1],
-              kur_des: numbers[2],
-              kurPercent_des: numbers[3],
-              total_des: numbers[4],
-              totalPercent_des: numbers[5],
-              kumk_jan: numbers[6],
-              kumkPercent_jan: numbers[7],
-              kur_jan: numbers[8],
-              kurPercent_jan: numbers[9],
-              total_jan: numbers[10],
-              totalPercent_jan: numbers[11],
-            })
-            console.log(`  ✅ ${kanwil}: Total_Jan=${numbers[10]} (${numbers[11]}%)`)
-          }
-          break
-        }
-      }
-      continue
-    }
-    
-    // Cabang data
-    const cabangMatch = line.match(/^(\d{1,2})\s+/)
-    if (cabangMatch && currentKanwil) {
-      const cabangIndex = parseInt(cabangMatch[1])
-      if (cabangIndex > 50) continue
-      
-      let cabangName = line.substring(cabangMatch[0].length).trim()
-      for (const kanwil of kanwilNames) {
-        const idx = cabangName.indexOf(kanwil)
-        if (idx !== -1) {
-          cabangName = cabangName.substring(0, idx).trim()
-          break
-        }
-      }
-      
-      const numbers = collectNumbersAcrossLines(lines, i, 13)
-      
-      if (numbers.length >= 13 && cabangName) {
-        cabangData.push({
-          kanwil: currentKanwil,
-          name: cabangName,
-          kumk_des: numbers[1],
-          kumkPercent_des: numbers[2],
-          kur_des: numbers[3],
-          kurPercent_des: numbers[4],
-          total_des: numbers[5],
-          totalPercent_des: numbers[6],
-          kumk_jan: numbers[7],
-          kumkPercent_jan: numbers[8],
-          kur_jan: numbers[9],
-          kurPercent_jan: numbers[10],
-          total_jan: numbers[11],
-          totalPercent_jan: numbers[12],
         })
       }
     }
   }
   
-  if (!totalNasional && kanwilData.length > 0) {
-    totalNasional = calculateTotalFromKanwil(kanwilData)
-  }
+  // Calculate total if not found
+  const totalNasional = calculateTotalFromKanwil(kanwilData)
   
   console.log(`✅ Final: ${cabangData.length} cabang, ${kanwilData.length} kanwil`)
-  if (totalNasional) {
-    console.log(`✅ TOTAL NASIONAL: ${totalNasional.total_jan} Jt (${totalNasional.totalPercent_jan}%)`)
-  }
+  console.log(`✅ TOTAL: ${totalNasional.total_jan} Jt (${totalNasional.totalPercent_jan}%)`)
   
   return {
     type: 'npl',
@@ -267,50 +274,49 @@ function parseKOL2Data(text) {
 }
 
 // ============================================
-// REALISASI PARSER WITH MULTI-LINE COLLECTION
+// REALISASI PARSER
 // ============================================
 function parseRealisasiData(text) {
-  console.log('🔍 Parsing Realisasi with multi-line collection...')
+  console.log('🔍 Parsing Realisasi using document content...')
   
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-  console.log(`Total lines: ${lines.length}`)
   
   const dailyData = []
   let monthlyTotals = { nov: 0, dec: 0, jan: 0 }
   
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    
+  for (const line of lines) {
     // Skip headers
-    if (isHeader(line)) continue
+    if (line.includes('REALISASI') || line.includes('(Rp Juta)') ||
+        line.includes('Nov-25') || line.includes('Tanggal') ||
+        line === 'KUR' || line === 'KUMK' || line === 'PRK' ||
+        line === 'SME' || line === 'Swadana' || line === 'Total') {
+      continue
+    }
     
-    // TOTAL line
+    // TOTAL line - from document: "TOTAL 118.557 86.927 137.261 41.349 651.502 16.710 134.807 1.052.306 145.415 295.158 36.750 595.113 239.893 6.840 1.447.136 32.243 25.071 2.430 59.861 44.557 171.002"
     if (line.startsWith('TOTAL')) {
-      const numbers = collectNumbersAcrossLines(lines, i, 21)
-      console.log(`TOTAL: collected ${numbers.length} numbers`)
+      const numbers = extractNumbers(line)
+      console.log(`TOTAL: ${numbers.length} numbers`)
       
       if (numbers.length >= 21) {
         monthlyTotals.nov = numbers[6]
         monthlyTotals.dec = numbers[13]
         monthlyTotals.jan = numbers[20]
-        console.log(`✅ Totals: Nov=${numbers[6]}, Dec=${numbers[13]}, Jan=${numbers[20]}`)
-      } else if (numbers.length >= 14) {
-        monthlyTotals.dec = numbers[6]
-        monthlyTotals.jan = numbers[13]
-        console.log(`✅ Totals: Dec=${numbers[6]}, Jan=${numbers[13]}`)
+        console.log(`✅ Nov=${numbers[6]}, Dec=${numbers[13]}, Jan=${numbers[20]}`)
       }
       continue
     }
     
-    // Daily data
-    const dateMatch = line.match(/^(\d{1,2})\s/)
+    // Daily data - from document: "1 419 250 - 200 - - 869 3.585 917 260 785 7.721 132 13.400 1 - - - - 334 335"
+    const dateMatch = line.match(/^(\d{1,2})\s+/)
     if (dateMatch) {
       const date = parseInt(dateMatch[1])
       if (date < 1 || date > 31) continue
       
-      const numbers = collectNumbersAcrossLines(lines, i, 22)
+      const numbers = extractNumbers(line)
       
       if (numbers.length >= 8) {
+        // Jan columns are last 7 numbers
         const totalIdx = numbers.length - 1
         const kurIdx = numbers.length - 7
         const kumkIdx = numbers.length - 6
@@ -345,111 +351,38 @@ function parseRealisasiData(text) {
 }
 
 // ============================================
-// HELPER: COLLECT NUMBERS ACROSS MULTIPLE LINES
+// HELPER: EXTRACT NUMBERS
 // ============================================
-function collectNumbersAcrossLines(lines, startIndex, targetCount) {
+function extractNumbers(text) {
   const numbers = []
-  let lineIndex = startIndex
   
-  // Collect from current and next lines until we have enough numbers
-  while (lineIndex < lines.length && numbers.length < targetCount) {
-    const line = lines[lineIndex]
-    
-    // Stop if hit a new section header (except on first line)
-    if (lineIndex > startIndex && isHeader(line)) break
-    
-    // Stop if hit a new data row (except on first line)
-    if (lineIndex > startIndex) {
-      if (line.match(/^\d{1,2}\s+\D/) ||
-          line.startsWith('Total Kanwil') ||
-          line.startsWith('TOTAL')) {
-        break
-      }
-    }
-    
-    // Extract all numbers from this line
-    const lineNumbers = parseAllNumbers(line)
-    numbers.push(...lineNumbers)
-    
-    lineIndex++
-    
-    // Safety: don't look more than 5 lines ahead
-    if (lineIndex - startIndex > 5) break
-  }
+  // Replace Indonesian format separators
+  let cleaned = text
+    .replace(/\./g, '')      // Remove thousands separator: 1.234 → 1234
+    .replace(/,/g, '.')      // Decimal separator: 1,23 → 1.23
   
-  return numbers
-}
-
-function isHeader(line) {
-  const headers = [
-    'KOLEKTIBILITAS', 'KUALITAS', 'REALISASI',
-    '(Rp Juta)', 'Pokok (Jt)', 'Nama Cabang', 'Wilayah',
-    '13 Des', '13 Jan', 'gap pokok', 'Tanggal',
-    'Nov-25', 'Dec-25', 'Jan-26',
-    'NPL Kredit', 'UMKM', 'HARIAN'
-  ]
-  
-  const singleWords = ['No', 'KUR', 'KUMK', 'PRK', 'SME', 'Swadana', 'Lainnya', 'KPP', 'Supply', 'Demand']
-  
-  if (singleWords.includes(line.trim())) return true
-  if (line.trim() === 'Total') return true
-  
-  for (const header of headers) {
-    if (line.includes(header)) return true
-  }
-  
-  return false
-}
-
-function parseAllNumbers(text) {
-  const numbers = []
-  const tokens = text.split(/\s+/)
+  // Extract all number patterns including negatives in parentheses
+  const tokens = cleaned.split(/\s+/)
   
   for (const token of tokens) {
-    if (!/[\d\.,\(\)\-]/.test(token)) continue
+    // Skip non-numeric
+    if (!/[\d\.\(\)\-]/.test(token)) continue
     
-    // Negative in parentheses
+    // Handle negative in parentheses: (123) → -123
     if (token.startsWith('(') && token.endsWith(')')) {
-      const inner = token.slice(1, -1).replace(/\./g, '').replace(/,/g, '.')
-      const num = parseFloat(inner)
-      if (!isNaN(num)) {
-        numbers.push(-num)
-      }
+      const num = parseFloat(token.slice(1, -1))
+      if (!isNaN(num)) numbers.push(-num)
       continue
     }
     
-    // Dash as zero
+    // Handle dash
     if (token === '-' || token === '–') {
       numbers.push(0)
       continue
     }
     
-    // Parse Indonesian number format
-    let numStr = token
-    const dotCount = (token.match(/\./g) || []).length
-    const commaCount = (token.match(/,/g) || []).length
-    
-    if (dotCount > 0 && commaCount > 0) {
-      numStr = token.replace(/\./g, '').replace(/,/g, '.')
-    } else if (dotCount > 1) {
-      numStr = token.replace(/\./g, '')
-    } else if (dotCount === 1) {
-      const parts = token.split('.')
-      if (parts[1] && parts[1].length === 3) {
-        numStr = token.replace(/\./g, '')
-      }
-    } else if (commaCount > 1) {
-      numStr = token.replace(/,/g, '')
-    } else if (commaCount === 1) {
-      const parts = token.split(',')
-      if (parts[1] && parts[1].length <= 2) {
-        numStr = token.replace(/,/g, '.')
-      } else {
-        numStr = token.replace(/,/g, '')
-      }
-    }
-    
-    const num = parseFloat(numStr)
+    // Parse number
+    const num = parseFloat(token)
     if (!isNaN(num) && isFinite(num)) {
       numbers.push(num)
     }
@@ -459,6 +392,17 @@ function parseAllNumbers(text) {
 }
 
 function calculateTotalFromKanwil(kanwilData) {
+  if (!kanwilData || kanwilData.length === 0) {
+    return {
+      kumk_des: 0, kumkPercent_des: 0,
+      kur_des: 0, kurPercent_des: 0,
+      total_des: 0, totalPercent_des: 0,
+      kumk_jan: 0, kumkPercent_jan: 0,
+      kur_jan: 0, kurPercent_jan: 0,
+      total_jan: 0, totalPercent_jan: 0,
+    }
+  }
+  
   const totals = {
     kumk_des: 0, kur_des: 0, total_des: 0,
     kumk_jan: 0, kur_jan: 0, total_jan: 0,
