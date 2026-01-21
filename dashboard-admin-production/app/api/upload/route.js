@@ -445,3 +445,4 @@ function sumKanwilData(kanwilData) {
     totalPercent_jan: avg('totalPercent_jan')
   }
 }
+// Updated after token reset
