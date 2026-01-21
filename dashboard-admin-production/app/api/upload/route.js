@@ -66,7 +66,8 @@ export async function POST(request) {
     console.log('Uploading to Vercel Blob...')
     
     try {
-      await put('npl_metadata.json', JSON.stringify({
+      // Upload metadata files
+      const nplMetaBlob = await put('npl_metadata.json', JSON.stringify({
         filename: nplFile.name,
         uploadDate,
         fileSize: nplFile.size
@@ -74,13 +75,15 @@ export async function POST(request) {
         access: 'public',
         addRandomSuffix: false
       })
+      console.log('✅ NPL metadata uploaded:', nplMetaBlob.url)
       
-      await put('npl_parsed.json', JSON.stringify(nplData), { 
+      const nplDataBlob = await put('npl_parsed.json', JSON.stringify(nplData), { 
         access: 'public',
         addRandomSuffix: false
       })
+      console.log('✅ NPL data uploaded:', nplDataBlob.url)
       
-      await put('kol2_metadata.json', JSON.stringify({
+      const kol2MetaBlob = await put('kol2_metadata.json', JSON.stringify({
         filename: kol2File.name,
         uploadDate,
         fileSize: kol2File.size
@@ -88,13 +91,15 @@ export async function POST(request) {
         access: 'public',
         addRandomSuffix: false
       })
+      console.log('✅ KOL2 metadata uploaded:', kol2MetaBlob.url)
       
-      await put('kol2_parsed.json', JSON.stringify(kol2Data), { 
+      const kol2DataBlob = await put('kol2_parsed.json', JSON.stringify(kol2Data), { 
         access: 'public',
         addRandomSuffix: false
       })
+      console.log('✅ KOL2 data uploaded:', kol2DataBlob.url)
       
-      await put('realisasi_metadata.json', JSON.stringify({
+      const realisasiMetaBlob = await put('realisasi_metadata.json', JSON.stringify({
         filename: realisasiFile.name,
         uploadDate,
         fileSize: realisasiFile.size
@@ -102,11 +107,13 @@ export async function POST(request) {
         access: 'public',
         addRandomSuffix: false
       })
+      console.log('✅ Realisasi metadata uploaded:', realisasiMetaBlob.url)
       
-      await put('realisasi_parsed.json', JSON.stringify(realisasiData), { 
+      const realisasiDataBlob = await put('realisasi_parsed.json', JSON.stringify(realisasiData), { 
         access: 'public',
         addRandomSuffix: false
       })
+      console.log('✅ Realisasi data uploaded:', realisasiDataBlob.url)
       
       console.log('All files uploaded successfully!')
       
@@ -118,17 +125,39 @@ export async function POST(request) {
           nplCabang: nplData.cabangData?.length || 0,
           kol2Cabang: kol2Data.cabangData?.length || 0,
           realisasiDays: realisasiData.dailyData?.length || 0
+        },
+        urls: {
+          nplMeta: nplMetaBlob.url,
+          nplData: nplDataBlob.url,
+          kol2Meta: kol2MetaBlob.url,
+          kol2Data: kol2DataBlob.url,
+          realisasiMeta: realisasiMetaBlob.url,
+          realisasiData: realisasiDataBlob.url
         }
       })
       
     } catch (blobError) {
       console.error('❌ Blob upload error:', blobError)
-      console.error('Error stack:', blobError.stack)
+      console.error('Error details:', {
+        message: blobError.message,
+        name: blobError.name,
+        stack: blobError.stack,
+        cause: blobError.cause
+      })
+      
+      // More detailed error response
+      let errorMessage = 'Failed to upload to Blob storage'
+      if (blobError.message?.includes('403') || blobError.message?.includes('Forbidden')) {
+        errorMessage = 'Permission denied. Please check your BLOB_READ_WRITE_TOKEN has write permissions.'
+      } else if (blobError.message?.includes('401') || blobError.message?.includes('Unauthorized')) {
+        errorMessage = 'Authentication failed. Please verify your BLOB_READ_WRITE_TOKEN is correct.'
+      }
+      
       return NextResponse.json(
         { 
-          error: 'Failed to upload to Blob storage', 
+          error: errorMessage,
           details: blobError.message,
-          stack: blobError.stack 
+          errorType: blobError.name
         },
         { status: 500 }
       )
@@ -136,12 +165,17 @@ export async function POST(request) {
     
   } catch (error) {
     console.error('❌ Upload error:', error)
-    console.error('Error stack:', error.stack)
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    })
+    
     return NextResponse.json(
       { 
         error: 'Upload failed', 
         details: error.message,
-        stack: error.stack 
+        errorType: error.name
       },
       { status: 500 }
     )
