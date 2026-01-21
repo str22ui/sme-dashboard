@@ -17,8 +17,13 @@ export default function UploadPage() {
 
   const handleFileChange = (type, e) => {
     const file = e.target.files?.[0]
+    console.log(`📁 File selected for ${type}:`, file?.name, file?.size)
     if (file) {
-      setFiles(prev => ({ ...prev, [type]: file }))
+      setFiles(prev => {
+        const updated = { ...prev, [type]: file }
+        console.log('Updated files state:', updated)
+        return updated
+      })
       setError(null)
     }
   }
