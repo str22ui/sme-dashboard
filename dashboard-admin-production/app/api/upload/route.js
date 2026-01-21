@@ -127,43 +127,35 @@ export async function POST(request) {
 }
 
 // ============================================
-// FLEXIBLE NPL/KOL2 PARSER
+// ACCURATE NPL PARSER
+// Based on actual PDF structure:
+// No | Nama | Kanwil | KUMK_Des | % | KUR_Des | % | Total_Des | % | KUMK_Jan | % | KUR_Jan | % | Total_Jan | % | gaps
 // ============================================
 function parseNPLData(text) {
-  console.log('Parsing NPL/KOL2 with flexible pattern matching...')
+  console.log('🔍 Parsing NPL with structure-aware parser...')
   
-  const lines = text.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  console.log(`Total lines: ${lines.length}`)
   
-  console.log(`Total lines in PDF: ${lines.length}`)
-  
-  const kanwilNames = [
-    'Jakarta I', 'Jakarta II', 'Jateng DIY', 
-    'Jabanus', 'Jatim Bali Nusra',
-    'Jawa Barat', 'Kalimantan', 'Sulampua', 
-    'Sumatera 1', 'Sumatera 2'
-  ]
+  const kanwilNames = ['Jakarta I', 'Jakarta II', 'Jateng DIY', 'Jabanus', 'Jatim Bali Nusra', 'Jawa Barat', 'Kalimantan', 'Sulampua', 'Sumatera 1', 'Sumatera 2']
   
   const cabangData = []
   const kanwilData = []
   let totalNasional = null
   let currentKanwil = null
   
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    
-    // Skip headers
-    if (isHeaderLine(line)) {
-      i++
+  for (const line of lines) {
+    // Skip pure headers
+    if (line.includes('KOLEKTIBILITAS') || line.includes('(Rp Juta)') || 
+        line.includes('Pokok (Jt)') || line.includes('13 Des') || 
+        line.includes('gap pokok') || line.includes('Wilayah')) {
       continue
     }
     
-    // TOTAL NASIONAL
+    // TOTAL NASIONAL - structure: KUMK_Des | % | KUR_Des | % | Total_Des | % | KUMK_Jan | % | KUR_Jan | % | Total_Jan | %
     if (line.startsWith('TOTAL NASIONAL')) {
-      const numbers = collectNumbers(lines, i, 12, true)
-      console.log(`TOTAL NASIONAL: collected ${numbers.length} numbers`)
+      const numbers = parseAllNumbers(line)
+      console.log(`TOTAL NASIONAL: ${numbers.length} numbers → ${numbers.slice(0, 12).join(', ')}`)
       
       if (numbers.length >= 12) {
         totalNasional = {
@@ -180,118 +172,96 @@ function parseNPLData(text) {
           total_jan: numbers[10],
           totalPercent_jan: numbers[11],
         }
+        console.log(`✅ Parsed TOTAL NASIONAL: Total Jan = ${numbers[10]} (${numbers[11]}%)`)
       }
-      i++
       continue
     }
     
-    // Total Kanwil
+    // Total Kanwil - same structure as TOTAL NASIONAL
     if (line.startsWith('Total Kanwil')) {
-      let foundKanwil = null
       for (const kanwil of kanwilNames) {
         if (line.includes(kanwil)) {
-          foundKanwil = kanwil
           currentKanwil = kanwil
+          const numbers = parseAllNumbers(line)
+          console.log(`Total Kanwil ${kanwil}: ${numbers.length} numbers`)
+          
+          if (numbers.length >= 12) {
+            kanwilData.push({
+              name: kanwil,
+              kumk_des: numbers[0],
+              kumkPercent_des: numbers[1],
+              kur_des: numbers[2],
+              kurPercent_des: numbers[3],
+              total_des: numbers[4],
+              totalPercent_des: numbers[5],
+              kumk_jan: numbers[6],
+              kumkPercent_jan: numbers[7],
+              kur_jan: numbers[8],
+              kurPercent_jan: numbers[9],
+              total_jan: numbers[10],
+              totalPercent_jan: numbers[11],
+            })
+            console.log(`  ✅ ${kanwil}: Total Jan = ${numbers[10]} (${numbers[11]}%)`)
+          }
           break
         }
       }
-      
-      if (foundKanwil) {
-        const numbers = collectNumbers(lines, i, 12, true)
-        console.log(`Total Kanwil ${foundKanwil}: collected ${numbers.length} numbers`)
-        
-        if (numbers.length >= 12) {
-          kanwilData.push({
-            name: foundKanwil,
-            kumk_des: numbers[0],
-            kumkPercent_des: numbers[1],
-            kur_des: numbers[2],
-            kurPercent_des: numbers[3],
-            total_des: numbers[4],
-            totalPercent_des: numbers[5],
-            kumk_jan: numbers[6],
-            kumkPercent_jan: numbers[7],
-            kur_jan: numbers[8],
-            kurPercent_jan: numbers[9],
-            total_jan: numbers[10],
-            totalPercent_jan: numbers[11],
-          })
-        }
-      }
-      i++
       continue
     }
     
-    // Cabang data - more flexible detection
-    // Look for lines starting with a number (1-99)
-    const indexMatch = line.match(/^(\d{1,2})\s+/)
-    if (indexMatch && currentKanwil) {
-      const cabangIndex = parseInt(indexMatch[1])
+    // Cabang data - starts with number
+    const cabangMatch = line.match(/^(\d{1,2})\s+/)
+    if (cabangMatch && currentKanwil) {
+      const cabangIndex = parseInt(cabangMatch[1])
+      if (cabangIndex > 50) continue // Skip non-cabang numbers
       
-      // Skip if number too large (likely a value, not index)
-      if (cabangIndex > 99) {
-        i++
-        continue
-      }
+      // Extract cabang name
+      let cabangName = line.substring(cabangMatch[0].length).trim()
       
-      // Extract cabang name: everything after index, before first number/kanwil
-      let cabangName = line.substring(indexMatch[0].length).trim()
-      
-      // Check if kanwil is on same line
-      let foundKanwil = currentKanwil
+      // Remove kanwil name from cabang name if present
       for (const kanwil of kanwilNames) {
-        const kanwilIdx = cabangName.indexOf(kanwil)
-        if (kanwilIdx !== -1) {
-          foundKanwil = kanwil
-          cabangName = cabangName.substring(0, kanwilIdx).trim()
+        const idx = cabangName.indexOf(kanwil)
+        if (idx !== -1) {
+          cabangName = cabangName.substring(0, idx).trim()
           break
         }
       }
       
-      // If no kanwil on same line, check next line
-      if (cabangName === line.substring(indexMatch[0].length).trim() && i + 1 < lines.length) {
-        const nextLine = lines[i + 1]
-        for (const kanwil of kanwilNames) {
-          if (nextLine.includes(kanwil)) {
-            foundKanwil = kanwil
-            break
-          }
-        }
-      }
+      const numbers = parseAllNumbers(line)
       
-      // Collect numbers
-      const numbers = collectNumbers(lines, i, 13, false)
-      
+      // Structure: index | KUMK_Des | % | KUR_Des | % | Total_Des | % | KUMK_Jan | % | KUR_Jan | % | Total_Jan | % | gaps
+      // Minimum 13 numbers (index + 12 data)
       if (numbers.length >= 13 && cabangName) {
-        console.log(`Cabang ${cabangIndex}: ${cabangName} (${foundKanwil}) - ${numbers.length} numbers`)
-        
         cabangData.push({
-          kanwil: foundKanwil,
+          kanwil: currentKanwil,
           name: cabangName,
-          kumk_des: numbers[1] || 0,
-          kumkPercent_des: numbers[2] || 0,
-          kur_des: numbers[3] || 0,
-          kurPercent_des: numbers[4] || 0,
-          total_des: numbers[5] || 0,
-          totalPercent_des: numbers[6] || 0,
-          kumk_jan: numbers[7] || 0,
-          kumkPercent_jan: numbers[8] || 0,
-          kur_jan: numbers[9] || 0,
-          kurPercent_jan: numbers[10] || 0,
-          total_jan: numbers[11] || 0,
-          totalPercent_jan: numbers[12] || 0,
+          // Skip index (numbers[0]), start from numbers[1]
+          kumk_des: numbers[1],
+          kumkPercent_des: numbers[2],
+          kur_des: numbers[3],
+          kurPercent_des: numbers[4],
+          total_des: numbers[5],
+          totalPercent_des: numbers[6],
+          kumk_jan: numbers[7],
+          kumkPercent_jan: numbers[8],
+          kur_jan: numbers[9],
+          kurPercent_jan: numbers[10],
+          total_jan: numbers[11],
+          totalPercent_jan: numbers[12],
         })
       }
     }
-    
-    i++
   }
   
-  if (!totalNasional) {
-    totalNasional = calculateTotalNasional(kanwilData)
+  // Fallback calculation if TOTAL NASIONAL not found
+  if (!totalNasional && kanwilData.length > 0) {
+    totalNasional = calculateTotalFromKanwil(kanwilData)
   }
   
-  console.log(`✅ Parsed ${cabangData.length} cabang and ${kanwilData.length} kanwil`)
+  console.log(`✅ Final: ${cabangData.length} cabang, ${kanwilData.length} kanwil`)
+  if (totalNasional) {
+    console.log(`✅ TOTAL NASIONAL: ${totalNasional.total_jan} Jt (${totalNasional.totalPercent_jan}%)`)
+  }
   
   return {
     type: 'npl',
@@ -307,110 +277,83 @@ function parseKOL2Data(text) {
 }
 
 // ============================================
-// FLEXIBLE REALISASI PARSER
+// ACCURATE REALISASI PARSER
+// Structure: Tanggal | Nov(7 cols) | Dec(7 cols) | Jan(7 cols)
+// Each month: KUR | KUMK PRK | SME Swadana | KUMK Lainnya | KPP Supply | KPP Demand | Total
 // ============================================
 function parseRealisasiData(text) {
-  console.log('Parsing Realisasi with flexible parsing...')
+  console.log('🔍 Parsing Realisasi with structure-aware parser...')
   
-  const lines = text.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
-  
-  console.log(`Total lines in Realisasi PDF: ${lines.length}`)
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  console.log(`Total lines: ${lines.length}`)
   
   const dailyData = []
-  let monthlyTotals = {
-    nov: 0,
-    dec: 0,
-    jan: 0
-  }
+  let monthlyTotals = { nov: 0, dec: 0, jan: 0 }
   
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    
+  for (const line of lines) {
     // Skip headers
-    if (isHeaderLine(line)) {
-      i++
+    if (line.includes('REALISASI') || line.includes('(Rp Juta)') ||
+        line.includes('Nov-25') || line.includes('Dec-25') || line.includes('Jan-26') ||
+        line === 'KUR' || line === 'KUMK' || line === 'PRK' || line === 'SME' ||
+        line === 'Swadana' || line === 'Lainnya' || line === 'KPP' ||
+        line === 'Supply' || line === 'Demand' || line === 'Total' || line === 'Tanggal') {
       continue
     }
     
-    // TOTAL line
-    if (line.startsWith('TOTAL') && !line.startsWith('TOTAL NASIONAL')) {
-      const numbers = collectNumbers(lines, i, 21, true)
-      console.log(`TOTAL line: collected ${numbers.length} numbers`)
+    // TOTAL line - has all 3 months
+    if (line.startsWith('TOTAL')) {
+      const numbers = parseAllNumbers(line)
+      console.log(`TOTAL line: ${numbers.length} numbers`)
       
+      // Structure: Nov(7) | Dec(7) | Jan(7) = 21 numbers
       if (numbers.length >= 21) {
-        monthlyTotals.nov = numbers[6] || 0
-        monthlyTotals.dec = numbers[13] || 0
-        monthlyTotals.jan = numbers[20] || 0
-      } else if (numbers.length >= 14) {
-        // Fallback: fewer months
-        monthlyTotals.dec = numbers[6] || 0
-        monthlyTotals.jan = numbers[13] || 0
+        monthlyTotals.nov = numbers[6]    // Nov Total (7th column)
+        monthlyTotals.dec = numbers[13]   // Dec Total (14th column)
+        monthlyTotals.jan = numbers[20]   // Jan Total (21st column)
+        console.log(`✅ Monthly totals: Nov=${numbers[6]}, Dec=${numbers[13]}, Jan=${numbers[20]}`)
       }
-      i++
       continue
     }
     
-    // Daily data
+    // Daily data - starts with date (1-31)
     const dateMatch = line.match(/^(\d{1,2})\s/)
     if (dateMatch) {
       const date = parseInt(dateMatch[1])
+      if (date < 1 || date > 31) continue
       
-      if (date >= 1 && date <= 31) {
-        const numbers = collectNumbers(lines, i, 22, false)
-        console.log(`Day ${date}: collected ${numbers.length} numbers`)
+      const numbers = parseAllNumbers(line)
+      
+      // Structure: date | Nov(7) | Dec(7) | Jan(7)
+      // Jan columns are the LAST 7 numbers
+      if (numbers.length >= 8) {
+        const totalIdx = numbers.length - 1  // Last number is always Total
+        const kurIdx = numbers.length - 7    // Jan KUR
+        const kumkIdx = numbers.length - 6   // Jan KUMK PRK
+        const smeIdx = numbers.length - 5    // Jan SME Swadana
         
-        if (numbers.length >= 22) {
-          // Full: Nov + Dec + Jan
-          const janStartIdx = numbers.length - 7
-          
-          dailyData.push({
-            date: date,
-            kur: numbers[janStartIdx] || 0,
-            kumk: numbers[janStartIdx + 1] || 0,
-            smeSwadana: numbers[janStartIdx + 2] || 0,
-            total: numbers[numbers.length - 1] || 0,
-          })
-        } else if (numbers.length >= 15) {
-          // Dec + Jan
-          const janStartIdx = numbers.length - 7
-          
-          dailyData.push({
-            date: date,
-            kur: numbers[janStartIdx] || 0,
-            kumk: numbers[janStartIdx + 1] || 0,
-            smeSwadana: numbers[janStartIdx + 2] || 0,
-            total: numbers[numbers.length - 1] || 0,
-          })
-        } else if (numbers.length >= 8) {
-          // Just Jan
-          dailyData.push({
-            date: date,
-            kur: numbers[1] || 0,
-            kumk: numbers[2] || 0,
-            smeSwadana: numbers[3] || 0,
-            total: numbers[numbers.length - 1] || 0,
-          })
-        }
+        dailyData.push({
+          date: date,
+          kur: numbers[kurIdx] || 0,
+          kumk: numbers[kumkIdx] || 0,
+          smeSwadana: numbers[smeIdx] || 0,
+          total: numbers[totalIdx] || 0,
+        })
+        
+        console.log(`Day ${date}: KUR=${numbers[kurIdx]}, Total=${numbers[totalIdx]}`)
       }
     }
-    
-    i++
   }
   
+  // Sort by date
   dailyData.sort((a, b) => a.date - b.date)
   
+  // Calculate Jan total from daily if not found
   if (monthlyTotals.jan === 0 && dailyData.length > 0) {
     monthlyTotals.jan = dailyData.reduce((sum, day) => sum + (day.total || 0), 0)
   }
   
-  if (monthlyTotals.nov === 0) monthlyTotals.nov = 152742
-  if (monthlyTotals.dec === 0) monthlyTotals.dec = 1052306
-  
-  console.log(`✅ Parsed ${dailyData.length} daily records`)
-  console.log('Monthly totals:', monthlyTotals)
+  console.log(`✅ Final: ${dailyData.length} days`)
+  console.log(`✅ Monthly totals: Nov=${monthlyTotals.nov}, Dec=${monthlyTotals.dec}, Jan=${monthlyTotals.jan}`)
   
   return {
     type: 'realisasi',
@@ -421,112 +364,59 @@ function parseRealisasiData(text) {
 }
 
 // ============================================
-// HELPER: COLLECT NUMBERS
+// HELPER FUNCTIONS
 // ============================================
-function collectNumbers(lines, startIndex, targetCount, stopAtNewDataRow) {
-  const numbers = []
-  let currentIndex = startIndex
-  
-  while (currentIndex < lines.length && numbers.length < targetCount) {
-    const line = lines[currentIndex]
-    
-    // Skip headers except on first line
-    if (currentIndex > startIndex && isHeaderLine(line)) {
-      break
-    }
-    
-    // Stop at new data row (if enabled)
-    if (currentIndex > startIndex && stopAtNewDataRow) {
-      if (line.match(/^\d{1,2}\s+\D/) ||      // New cabang
-          line.startsWith('Total Kanwil') ||   // New kanwil
-          line.startsWith('TOTAL')) {          // New total
-        break
-      }
-    }
-    
-    // Extract numbers
-    const lineNumbers = parseNumbersFromLine(line)
-    numbers.push(...lineNumbers)
-    
-    currentIndex++
-    
-    // Safety: max 3 lines for most cases, 10 for totals
-    const maxLookahead = targetCount >= 20 ? 10 : 3
-    if (currentIndex - startIndex > maxLookahead) {
-      break
-    }
-  }
-  
-  return numbers
-}
 
-function isHeaderLine(line) {
-  const headers = [
-    'KOLEKTIBILITAS', 'KUALITAS', 'REALISASI', 
-    '(Rp Juta)', 'Pokok (Jt)', 'No', 'Nama Cabang',
-    '13 Des', '13 Jan', 'gap pokok', 'Tanggal',
-    'Nov-25', 'Dec-25', 'Jan-26', 'Wilayah'
-  ]
-  
-  const singleWordHeaders = [
-    'KUR', 'KUMK', 'PRK', 'SME', 'Swadana', 
-    'Lainnya', 'KPP', 'Supply', 'Demand'
-  ]
-  
-  if (singleWordHeaders.includes(line.trim())) return true
-  
-  for (const header of headers) {
-    if (line.includes(header)) return true
-  }
-  
-  if (line.trim() === 'Total') return true
-  
-  return false
-}
-
-function parseNumbersFromLine(text) {
+function parseAllNumbers(text) {
   const numbers = []
-  const tokens = text.split(/\s+/).filter(t => t.length > 0)
+  const tokens = text.split(/\s+/)
   
   for (const token of tokens) {
+    // Skip non-numeric tokens
     if (!/[\d\.,\(\)\-]/.test(token)) continue
     
+    // Handle negative numbers in parentheses: (123) → -123
     if (token.startsWith('(') && token.endsWith(')')) {
-      const inner = token.slice(1, -1)
-      const numStr = inner.replace(/\./g, '').replace(/,/g, '.')
-      const num = parseFloat(numStr)
-      if (!isNaN(num)) {
-        numbers.push(-num)
-      }
+      const inner = token.slice(1, -1).replace(/\./g, '').replace(/,/g, '.')
+      const num = parseFloat(inner)
+      if (!isNaN(num)) numbers.push(-num)
       continue
     }
     
+    // Handle dash as zero
     if (token === '-' || token === '–') {
       numbers.push(0)
       continue
     }
     
+    // Parse Indonesian format: 1.234.567,89
+    let numStr = token
     const dotCount = (token.match(/\./g) || []).length
     const commaCount = (token.match(/,/g) || []).length
     
-    let numStr = token
-    
     if (dotCount > 0 && commaCount > 0) {
+      // Mixed: 1.234,56 → remove dots, comma to period
       numStr = token.replace(/\./g, '').replace(/,/g, '.')
     } else if (dotCount > 1) {
+      // Multiple dots: 1.234.567 → remove all dots
       numStr = token.replace(/\./g, '')
     } else if (dotCount === 1) {
       const parts = token.split('.')
       if (parts[1] && parts[1].length === 3) {
+        // Thousands: 1.234 → 1234
         numStr = token.replace(/\./g, '')
       }
+      // else: decimal 1.5 → keep as is
     } else if (commaCount > 1) {
+      // Multiple commas: 1,234,567 → 1234567
       numStr = token.replace(/,/g, '')
     } else if (commaCount === 1) {
       const parts = token.split(',')
       if (parts[1] && parts[1].length <= 2) {
+        // Decimal: 1234,56 → 1234.56
         numStr = token.replace(/,/g, '.')
       } else {
+        // Thousands: 1,234 → 1234
         numStr = token.replace(/,/g, '')
       }
     }
@@ -540,18 +430,7 @@ function parseNumbersFromLine(text) {
   return numbers
 }
 
-function calculateTotalNasional(kanwilData) {
-  if (!kanwilData || kanwilData.length === 0) {
-    return {
-      kumk_des: 0, kumkPercent_des: 0,
-      kur_des: 0, kurPercent_des: 0,
-      total_des: 0, totalPercent_des: 0,
-      kumk_jan: 0, kumkPercent_jan: 0,
-      kur_jan: 0, kurPercent_jan: 0,
-      total_jan: 0, totalPercent_jan: 0,
-    }
-  }
-  
+function calculateTotalFromKanwil(kanwilData) {
   const totals = {
     kumk_des: 0, kur_des: 0, total_des: 0,
     kumk_jan: 0, kur_jan: 0, total_jan: 0,
@@ -567,25 +446,25 @@ function calculateTotalNasional(kanwilData) {
   })
   
   const count = kanwilData.length
-  const sumKumkPercentDes = kanwilData.reduce((sum, k) => sum + (k.kumkPercent_des || 0), 0)
-  const sumKurPercentDes = kanwilData.reduce((sum, k) => sum + (k.kurPercent_des || 0), 0)
-  const sumTotalPercentDes = kanwilData.reduce((sum, k) => sum + (k.totalPercent_des || 0), 0)
-  const sumKumkPercentJan = kanwilData.reduce((sum, k) => sum + (k.kumkPercent_jan || 0), 0)
-  const sumKurPercentJan = kanwilData.reduce((sum, k) => sum + (k.kurPercent_jan || 0), 0)
-  const sumTotalPercentJan = kanwilData.reduce((sum, k) => sum + (k.totalPercent_jan || 0), 0)
+  const avgKumkPercentDes = kanwilData.reduce((sum, k) => sum + (k.kumkPercent_des || 0), 0) / count
+  const avgKurPercentDes = kanwilData.reduce((sum, k) => sum + (k.kurPercent_des || 0), 0) / count
+  const avgTotalPercentDes = kanwilData.reduce((sum, k) => sum + (k.totalPercent_des || 0), 0) / count
+  const avgKumkPercentJan = kanwilData.reduce((sum, k) => sum + (k.kumkPercent_jan || 0), 0) / count
+  const avgKurPercentJan = kanwilData.reduce((sum, k) => sum + (k.kurPercent_jan || 0), 0) / count
+  const avgTotalPercentJan = kanwilData.reduce((sum, k) => sum + (k.totalPercent_jan || 0), 0) / count
   
   return {
     kumk_des: totals.kumk_des,
-    kumkPercent_des: sumKumkPercentDes / count,
+    kumkPercent_des: avgKumkPercentDes,
     kur_des: totals.kur_des,
-    kurPercent_des: sumKurPercentDes / count,
+    kurPercent_des: avgKurPercentDes,
     total_des: totals.total_des,
-    totalPercent_des: sumTotalPercentDes / count,
+    totalPercent_des: avgTotalPercentDes,
     kumk_jan: totals.kumk_jan,
-    kumkPercent_jan: sumKumkPercentJan / count,
+    kumkPercent_jan: avgKumkPercentJan,
     kur_jan: totals.kur_jan,
-    kurPercent_jan: sumKurPercentJan / count,
+    kurPercent_jan: avgKurPercentJan,
     total_jan: totals.total_jan,
-    totalPercent_jan: sumTotalPercentJan / count,
+    totalPercent_jan: avgTotalPercentJan,
   }
 }
