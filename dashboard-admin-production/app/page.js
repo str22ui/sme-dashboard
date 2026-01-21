@@ -1,268 +1,165 @@
-'use client'
+import { useState } from 'react';
 
-import { useState, useEffect } from 'react'
-
-export default function AdminPage() {
-  const [nplFile, setNplFile] = useState(null)
-  const [kol2File, setKol2File] = useState(null)
-  const [realisasiFile, setRealisasiFile] = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [currentData, setCurrentData] = useState({
+export default function UploadComponent() {
+  const [files, setFiles] = useState({
     npl: null,
     kol2: null,
     realisasi: null
-  })
+  });
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
-  // Fetch current data status on mount
-  useEffect(() => {
-    fetchCurrentStatus()
-  }, [])
-
-  const fetchCurrentStatus = async () => {
-    try {
-      const response = await fetch('/api/status')
-      const data = await response.json()
-      setCurrentData(data)
-    } catch (error) {
-      console.error('Failed to fetch status:', error)
+  const handleFileChange = (type, e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFiles(prev => ({ ...prev, [type]: file }));
+      setError(null);
     }
-  }
+  };
 
   const handleUpload = async () => {
-    if (!nplFile || !kol2File || !realisasiFile) {
-      setError('Please select all 3 PDF files')
-      return
+    setError(null);
+    setSuccess(null);
+
+    // Validate files
+    if (!files.npl || !files.kol2 || !files.realisasi) {
+      setError('Please select all 3 Excel files');
+      return;
     }
 
-    setUploading(true)
-    setMessage('')
-    setError('')
+    setUploading(true);
 
     try {
-      const formData = new FormData()
-      formData.append('npl', nplFile)
-      formData.append('kol2', kol2File)
-      formData.append('realisasi', realisasiFile)
+      const formData = new FormData();
+      formData.append('npl', files.npl);
+      formData.append('kol2', files.kol2);
+      formData.append('realisasi', files.realisasi);
 
-      console.log('Uploading files:', {
-        npl: nplFile.name,
-        kol2: kol2File.name,
-        realisasi: realisasiFile.name
-      })
+      console.log('📤 Uploading files...');
+      console.log('Files:', {
+        npl: files.npl.name,
+        kol2: files.kol2.name,
+        realisasi: files.realisasi.name
+      });
 
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData
-      })
+      });
 
-      const result = await response.json()
+      console.log('📥 Response status:', response.status);
+      console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
 
-      if (!response.ok) {
-        throw new Error(result.error || result.details || 'Upload failed')
+      // Get response text first (to handle non-JSON responses)
+      const responseText = await response.text();
+      console.log('📥 Response text:', responseText);
+
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ JSON Parse Error:', parseError);
+        throw new Error(`Server returned non-JSON response (${response.status}): ${responseText.substring(0, 200)}`);
       }
 
-      setMessage('Files uploaded successfully!')
-      setNplFile(null)
-      setKol2File(null)
-      setRealisasiFile(null)
+      if (!response.ok) {
+        throw new Error(data.error || data.details || `Upload failed with status ${response.status}`);
+      }
+
+      console.log('✅ Upload successful:', data);
+      setSuccess(`Files uploaded successfully! Stats: NPL Cabang: ${data.stats?.nplCabang || 0}, KOL2 Cabang: ${data.stats?.kol2Cabang || 0}, Realisasi Days: ${data.stats?.realisasiDays || 0}`);
       
-      // Refresh status
-      setTimeout(() => {
-        fetchCurrentStatus()
-      }, 1000)
+      // Reset files
+      setFiles({ npl: null, kol2: null, realisasi: null });
 
     } catch (err) {
-      console.error('Upload error:', err)
-      setError(err.message)
+      console.error('❌ Upload error:', err);
+      setError(err.message || 'Upload failed');
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="text-4xl">📊</div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">
-                SME Dashboard - Admin Upload Portal
-              </h1>
-              <p className="text-gray-600">Upload 3 PDF files to update both TV dashboards</p>
-            </div>
-          </div>
+    <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
+      <h2 className="text-2xl font-bold mb-6">📁 Upload Excel Files</h2>
+
+      {/* NPL File */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-2">1. NPL SME</label>
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={(e) => handleFileChange('npl', e)}
+          className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 p-2"
+        />
+        {files.npl && (
+          <p className="text-sm text-green-600 mt-1">✅ {files.npl.name}</p>
+        )}
+      </div>
+
+      {/* KOL2 File */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-2">2. Kol 2 SME</label>
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={(e) => handleFileChange('kol2', e)}
+          className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 p-2"
+        />
+        {files.kol2 && (
+          <p className="text-sm text-green-600 mt-1">✅ {files.kol2.name}</p>
+        )}
+      </div>
+
+      {/* Realisasi File */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium mb-2">3. Realisasi Harian</label>
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={(e) => handleFileChange('realisasi', e)}
+          className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 p-2"
+        />
+        {files.realisasi && (
+          <p className="text-sm text-green-600 mt-1">✅ {files.realisasi.name}</p>
+        )}
+      </div>
+
+      {/* Upload Button */}
+      <button
+        onClick={handleUpload}
+        disabled={uploading || !files.npl || !files.kol2 || !files.realisasi}
+        className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+      >
+        {uploading ? '⏳ Uploading...' : '📤 Upload All Files & Replace'}
+      </button>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800 font-medium">❌ Error</p>
+          <p className="text-red-700 text-sm mt-1">{error}</p>
         </div>
+      )}
 
-        {/* Current Data Status */}
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            📅 Current Data Status
-          </h2>
-          <div className="grid grid-cols-3 gap-6">
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold text-gray-700 mb-2">NPL SME</h3>
-              {currentData.npl ? (
-                <>
-                  <p className="text-sm text-gray-600">
-                    📄 {currentData.npl.filename}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(currentData.npl.uploadDate).toLocaleString('id-ID')}
-                  </p>
-                </>
-              ) : (
-                <p className="text-gray-400">🔵 No data</p>
-              )}
-            </div>
-
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold text-gray-700 mb-2">Kol 2 SME</h3>
-              {currentData.kol2 ? (
-                <>
-                  <p className="text-sm text-gray-600">
-                    📄 {currentData.kol2.filename}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(currentData.kol2.uploadDate).toLocaleString('id-ID')}
-                  </p>
-                </>
-              ) : (
-                <p className="text-gray-400">🔵 No data</p>
-              )}
-            </div>
-
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold text-gray-700 mb-2">Realisasi Harian</h3>
-              {currentData.realisasi ? (
-                <>
-                  <p className="text-sm text-gray-600">
-                    📄 {currentData.realisasi.filename}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(currentData.realisasi.uploadDate).toLocaleString('id-ID')}
-                  </p>
-                </>
-              ) : (
-                <p className="text-gray-400">🔵 No data</p>
-              )}
-            </div>
-          </div>
+      {/* Success Message */}
+      {success && (
+        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-green-800 font-medium">✅ Success</p>
+          <p className="text-green-700 text-sm mt-1">{success}</p>
         </div>
+      )}
 
-        {/* Upload Form */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-            📁 Upload New Data (will replace old)
-          </h2>
-
-          {/* NPL File */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              1. NPL SME
-            </label>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => setNplFile(e.target.files[0])}
-              className="block w-full text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4
-                file:rounded-lg file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100"
-            />
-            {nplFile && (
-              <p className="mt-2 text-sm text-green-600">✅ {nplFile.name}</p>
-            )}
-          </div>
-
-          {/* KOL2 File */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              2. Kol 2 SME
-            </label>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => setKol2File(e.target.files[0])}
-              className="block w-full text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4
-                file:rounded-lg file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100"
-            />
-            {kol2File && (
-              <p className="mt-2 text-sm text-green-600">✅ {kol2File.name}</p>
-            )}
-          </div>
-
-          {/* Realisasi File */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              3. Realisasi Harian
-            </label>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => setRealisasiFile(e.target.files[0])}
-              className="block w-full text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4
-                file:rounded-lg file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100"
-            />
-            {realisasiFile && (
-              <p className="mt-2 text-sm text-green-600">✅ {realisasiFile.name}</p>
-            )}
-          </div>
-
-          {/* Warning */}
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-            <p className="text-sm text-yellow-700">
-              ⚠️ Warning: Uploading will DELETE old data and replace with new files!
-            </p>
-          </div>
-
-          {/* Upload Button */}
-          <button
-            onClick={handleUpload}
-            disabled={uploading || !nplFile || !kol2File || !realisasiFile}
-            className={`w-full py-3 px-6 rounded-lg font-semibold text-white transition-colors ${
-              uploading || !nplFile || !kol2File || !realisasiFile
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {uploading ? 'Uploading...' : 'Upload All Files & Replace'}
-          </button>
-
-          {/* Success Message */}
-          {message && (
-            <div className="mt-4 bg-green-50 border-l-4 border-green-400 p-4">
-              <p className="text-green-700">✅ {message}</p>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4">
-              <p className="text-red-700">❌ Error: {error}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Info */}
-        <div className="mt-8 text-center text-sm text-gray-600">
-          <p>Dashboard NPL: Port 3001 | Dashboard KOL: Port 3002</p>
-          <p className="mt-2">Data will auto-refresh every 30 seconds</p>
-        </div>
+      {/* Debug Info */}
+      <div className="mt-6 p-4 bg-gray-50 rounded-lg text-xs">
+        <p className="font-medium mb-2">🔍 Debug Info:</p>
+        <p>• API Endpoint: /api/upload</p>
+        <p>• Files Ready: {Object.values(files).filter(Boolean).length}/3</p>
+        <p>• Check browser console for detailed logs</p>
       </div>
     </div>
-  )
+  );
 }
