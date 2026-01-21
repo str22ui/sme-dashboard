@@ -127,12 +127,11 @@ export async function POST(request) {
 }
 
 // ============================================
-// IMPROVED NPL/KOL2 PARSER
+// MULTI-LINE AWARE NPL/KOL2 PARSER
 // ============================================
 function parseNPLData(text) {
-  console.log('Parsing NPL/KOL2 data with improved parser...')
+  console.log('Parsing NPL/KOL2 data with multi-line aware parser...')
   
-  // Clean and split lines
   const lines = text.split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 0)
@@ -150,23 +149,17 @@ function parseNPLData(text) {
   const kanwilData = []
   let totalNasional = null
   
-  // Pattern untuk cabang: nomor + nama cabang + kanwil
-  // Lebih flexible - accept any text between number and kanwil name
   const cabangPattern = /^(\d+)\s+(.+?)\s+(Jakarta I|Jakarta II|Jateng DIY|Jabanus|Jatim Bali Nusra|Jawa Barat|Kalimantan|Sulampua|Sumatera 1|Sumatera 2)\s+/
   
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+  // 🔑 KEY FIX: Merge related lines
+  const mergedLines = mergeMultilineData(lines)
+  console.log(`Merged into ${mergedLines.length} logical lines`)
+  
+  for (let i = 0; i < mergedLines.length; i++) {
+    const line = mergedLines[i]
     
-    // Skip header lines
-    if (line.includes('KOLEKTIBILITAS') || 
-        line.includes('KUALITAS') ||
-        line.includes('(Rp Juta)') ||
-        line.includes('Pokok (Jt)') ||
-        line.includes('13 Des') ||
-        line.includes('13 Jan') ||
-        line.includes('gap pokok')) {
-      continue
-    }
+    // Skip headers
+    if (isHeaderLine(line)) continue
     
     // Detect TOTAL NASIONAL
     if (line.startsWith('TOTAL NASIONAL')) {
@@ -236,13 +229,10 @@ function parseNPLData(text) {
       
       const numbers = parseNumbersFromLine(line)
       
-      // We expect: index + 12 data numbers (6 Des + 6 Jan) + gap numbers
-      // Minimum 13 numbers (index + 12 data)
       if (numbers.length >= 13) {
         cabangData.push({
           kanwil: kanwil,
           name: cabangName,
-          // Skip first number (index)
           kumk_des: numbers[1] || 0,
           kumkPercent_des: numbers[2] || 0,
           kur_des: numbers[3] || 0,
@@ -260,7 +250,6 @@ function parseNPLData(text) {
     }
   }
   
-  // If TOTAL NASIONAL not found, calculate from kanwil
   if (!totalNasional) {
     totalNasional = calculateTotalNasional(kanwilData)
   }
@@ -277,15 +266,14 @@ function parseNPLData(text) {
 }
 
 function parseKOL2Data(text) {
-  // KOL2 has same structure as NPL
   return parseNPLData(text)
 }
 
 // ============================================
-// IMPROVED REALISASI PARSER
+// MULTI-LINE AWARE REALISASI PARSER
 // ============================================
 function parseRealisasiData(text) {
-  console.log('Parsing Realisasi data with improved parser...')
+  console.log('Parsing Realisasi data with multi-line aware parser...')
   
   const lines = text.split('\n')
     .map(l => l.trim())
@@ -300,103 +288,65 @@ function parseRealisasiData(text) {
     jan: 0
   }
   
-  // Skip header lines (many lines in realisasi PDF)
-  let dataStarted = false
+  // Merge multi-line data
+  const mergedLines = mergeMultilineData(lines)
+  console.log(`Merged into ${mergedLines.length} logical lines`)
   
-  for (const line of lines) {
+  for (const line of mergedLines) {
     // Skip headers
-    if (line.includes('REALISASI') || 
-        line.includes('(Rp Juta)') ||
-        line === 'KUR' ||
-        line === 'KUMK' ||
-        line === 'PRK' ||
-        line === 'SME' ||
-        line === 'Swadana' ||
-        line === 'Lainnya' ||
-        line === 'KPP' ||
-        line === 'Supply' ||
-        line === 'Demand' ||
-        line === 'Total' ||
-        line === 'Nov-25' ||
-        line === 'Dec-25' ||
-        line === 'Jan-26' ||
-        line === 'Tanggal') {
-      continue
-    }
+    if (isHeaderLine(line)) continue
     
     // Look for TOTAL line
     if (line.startsWith('TOTAL') && !line.startsWith('TOTAL NASIONAL')) {
       const numbers = parseNumbersFromLine(line)
       console.log(`Found TOTAL line with ${numbers.length} numbers`)
       
-      // Structure: TOTAL | Nov(7 cols) | Dec(7 cols) | Jan(7 cols)
-      // Extract the Total column from each month
       if (numbers.length >= 21) {
-        monthlyTotals.nov = numbers[6] || 0    // Nov Total (column 7)
-        monthlyTotals.dec = numbers[13] || 0   // Dec Total (column 14)
-        monthlyTotals.jan = numbers[20] || 0   // Jan Total (column 21)
+        monthlyTotals.nov = numbers[6] || 0
+        monthlyTotals.dec = numbers[13] || 0
+        monthlyTotals.jan = numbers[20] || 0
       }
       continue
     }
     
-    // Parse daily data - lines starting with day number (1-31)
+    // Parse daily data
     const dateMatch = line.match(/^(\d{1,2})\s+/)
     if (dateMatch) {
       const date = parseInt(dateMatch[1])
       
-      // Only accept valid dates
       if (date < 1 || date > 31) continue
       
       const numbers = parseNumbersFromLine(line)
       console.log(`Day ${date}: found ${numbers.length} numbers`)
       
-      // Line structure: Day | Nov(7) | Dec(7) | Jan(7)
-      // Total numbers: 1 + 21 = 22
-      
       if (numbers.length >= 22) {
-        // January columns are at the end (last 7 numbers)
         const janStartIdx = numbers.length - 7
         
-        const kur = numbers[janStartIdx] || 0
-        const kumk = numbers[janStartIdx + 1] || 0
-        const smeSwadana = numbers[janStartIdx + 2] || 0
-        const total = numbers[numbers.length - 1] || 0  // Last column is Total
-        
         dailyData.push({
           date: date,
-          kur: kur,
-          kumk: kumk,
-          smeSwadana: smeSwadana,
-          total: total
+          kur: numbers[janStartIdx] || 0,
+          kumk: numbers[janStartIdx + 1] || 0,
+          smeSwadana: numbers[janStartIdx + 2] || 0,
+          total: numbers[numbers.length - 1] || 0,
         })
       } else if (numbers.length >= 8) {
-        // Fallback: if less columns, assume it's just Jan data
-        // Format: Day | KUR | KUMK | SME | ... | Total
-        const kur = numbers[1] || 0
-        const kumk = numbers[2] || 0
-        const smeSwadana = numbers[3] || 0
-        const total = numbers[numbers.length - 1] || 0
-        
         dailyData.push({
           date: date,
-          kur: kur,
-          kumk: kumk,
-          smeSwadana: smeSwadana,
-          total: total
+          kur: numbers[1] || 0,
+          kumk: numbers[2] || 0,
+          smeSwadana: numbers[3] || 0,
+          total: numbers[numbers.length - 1] || 0,
         })
       }
     }
   }
   
-  // Sort by date
   dailyData.sort((a, b) => a.date - b.date)
   
-  // If monthly totals not found, calculate from daily
   if (monthlyTotals.jan === 0 && dailyData.length > 0) {
     monthlyTotals.jan = dailyData.reduce((sum, day) => sum + (day.total || 0), 0)
   }
   
-  // Default fallback values
   if (monthlyTotals.nov === 0) monthlyTotals.nov = 152742
   if (monthlyTotals.dec === 0) monthlyTotals.dec = 1052306
   
@@ -412,20 +362,91 @@ function parseRealisasiData(text) {
 }
 
 // ============================================
-// HELPER FUNCTIONS
+// HELPER: MERGE MULTI-LINE DATA
 // ============================================
+function mergeMultilineData(lines) {
+  const merged = []
+  let currentLine = ''
+  let expectingMoreNumbers = false
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    
+    // Skip pure header lines
+    if (isHeaderLine(line)) continue
+    
+    // Check if this line starts a data row
+    const startsDataRow = (
+      line.match(/^\d+\s+/) ||                    // Cabang: "1 Jakarta ..."
+      line.startsWith('Total Kanwil') ||          // Kanwil total
+      line.startsWith('TOTAL NASIONAL') ||        // National total
+      line.startsWith('TOTAL ')                   // Realisasi total
+    )
+    
+    if (startsDataRow) {
+      // Save previous line if exists
+      if (currentLine) {
+        merged.push(currentLine)
+      }
+      // Start new line
+      currentLine = line
+      expectingMoreNumbers = true
+    } else if (expectingMoreNumbers && /^\d/.test(line)) {
+      // This line starts with number and we're expecting continuation
+      // Append to current line
+      currentLine += ' ' + line
+    } else if (expectingMoreNumbers) {
+      // End of data row
+      if (currentLine) {
+        merged.push(currentLine)
+        currentLine = ''
+      }
+      expectingMoreNumbers = false
+    }
+  }
+  
+  // Don't forget last line
+  if (currentLine) {
+    merged.push(currentLine)
+  }
+  
+  return merged
+}
 
+function isHeaderLine(line) {
+  const headers = [
+    'KOLEKTIBILITAS', 'KUALITAS', 'REALISASI', 
+    '(Rp Juta)', 'Pokok (Jt)', 'No', 'Nama Cabang',
+    '13 Des', '13 Jan', 'gap pokok', 'Tanggal',
+    'Nov-25', 'Dec-25', 'Jan-26', 'Wilayah'
+  ]
+  
+  const singleWordHeaders = [
+    'KUR', 'KUMK', 'PRK', 'SME', 'Swadana', 
+    'Lainnya', 'KPP', 'Supply', 'Demand', 'Total'
+  ]
+  
+  // Check single word headers (exact match)
+  if (singleWordHeaders.includes(line.trim())) return true
+  
+  // Check multi-word headers (contains)
+  for (const header of headers) {
+    if (line.includes(header)) return true
+  }
+  
+  return false
+}
+
+// ============================================
+// HELPER: PARSE NUMBERS
+// ============================================
 function parseNumbersFromLine(text) {
   const numbers = []
-  
-  // Split by whitespace first
   const tokens = text.split(/\s+/).filter(t => t.length > 0)
   
   for (const token of tokens) {
-    // Skip pure text tokens
     if (!/[\d\.,\(\)\-]/.test(token)) continue
     
-    // Handle negative in parentheses: (1.234) or (1234)
     if (token.startsWith('(') && token.endsWith(')')) {
       const inner = token.slice(1, -1)
       const numStr = inner.replace(/\./g, '').replace(/,/g, '.')
@@ -436,47 +457,32 @@ function parseNumbersFromLine(text) {
       continue
     }
     
-    // Handle dash as zero or negative indicator
     if (token === '-' || token === '–') {
       numbers.push(0)
       continue
     }
     
-    // Count dots and commas
     const dotCount = (token.match(/\./g) || []).length
     const commaCount = (token.match(/,/g) || []).length
     
     let numStr = token
     
-    // Indonesian format: 1.234.567,89 (dots for thousands, comma for decimal)
     if (dotCount > 0 && commaCount > 0) {
       numStr = token.replace(/\./g, '').replace(/,/g, '.')
-    }
-    // Multiple dots: Indonesian thousands (1.234.567)
-    else if (dotCount > 1) {
+    } else if (dotCount > 1) {
       numStr = token.replace(/\./g, '')
-    }
-    // Single dot with 3 digits after: thousands (1.234)
-    else if (dotCount === 1) {
+    } else if (dotCount === 1) {
       const parts = token.split('.')
       if (parts[1] && parts[1].length === 3 && !parts[1].includes(',')) {
         numStr = token.replace(/\./g, '')
       }
-      // else: decimal number, keep as is
-    }
-    // Multiple commas: English thousands (1,234,567)
-    else if (commaCount > 1) {
+    } else if (commaCount > 1) {
       numStr = token.replace(/,/g, '')
-    }
-    // Single comma
-    else if (commaCount === 1) {
+    } else if (commaCount === 1) {
       const parts = token.split(',')
-      // If 1-2 digits after comma: decimal (1234,89)
       if (parts[1] && parts[1].length <= 2) {
         numStr = token.replace(/,/g, '.')
-      }
-      // else: thousands (1,234)
-      else {
+      } else {
         numStr = token.replace(/,/g, '')
       }
     }
